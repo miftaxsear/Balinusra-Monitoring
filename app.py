@@ -4,36 +4,186 @@ import pandas as pd
 import streamlit as st
 
 # 1. Konfigurasi Halaman Streamlit
-st.set_page_config(page_title="Dashboard FRX DT", layout="wide")
+st.set_page_config(page_title="Balinusra Monitoring", layout="wide")
+
+# -------------------------------------------------------------
+# 2. DATABASE USER LOGIN
+# -------------------------------------------------------------
+USERS = {
+    "admin": {
+        "password": "admin123",
+        "role": "admin",
+        "name": "Administrator",
+    },
+    "user": {"password": "user123", "role": "viewer", "name": "User Biasa"},
+}
+
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+    st.session_state["role"] = None
+    st.session_state["user_name"] = ""
 
 
-# 2. Fungsi Membaca Master Excel & Seluruh Sheet Harian
+# -------------------------------------------------------------
+# 3. HALAMAN LOGIN STYLE MYDATINDO
+# -------------------------------------------------------------
+def show_login_page():
+    login_css = """
+    <style>
+        /* Sembunyikan Header bawaan Streamlit */
+        header {visibility: hidden;}
+        .block-container {
+            padding-top: 3rem !important;
+            padding-bottom: 2rem !important;
+        }
+        
+        /* Judul Utama di Luar Box */
+        .brand-title {
+            font-family: 'Lucida Calligraphy', 'Lucida Handwriting', 'Apple Chancery', cursive;
+            color: #27ae60;
+            font-size: 34px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        /* Teks Subtitle */
+        .login-subtitle {
+            text-align: center;
+            color: #666666;
+            font-size: 13px;
+            margin-bottom: 18px;
+        }
+
+        /* Styling Input Field Biru ala MyDatindo */
+        div[data-baseweb="input"] {
+            background-color: #eef4fb !important;
+            border: 1px solid #b8d3f2 !important;
+            border-radius: 3px !important;
+        }
+        
+        div[data-baseweb="input"] input {
+            color: #2c3e50 !important;
+            font-size: 14px !important;
+        }
+
+        /* Styling Tombol Sign In Biru */
+        div.stButton > button {
+            width: 100% !important;
+            background-color: #3488b5 !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 3px !important;
+            padding: 8px 0px !important;
+            font-weight: bold !important;
+            font-size: 14px !important;
+            margin-top: 8px !important;
+        }
+
+        div.stButton > button:hover {
+            background-color: #286f95 !important;
+            color: #ffffff !important;
+        }
+
+        /* Footer Copyright */
+        .login-footer {
+            margin-top: 22px;
+            font-size: 11px;
+            color: #777777;
+            text-align: center;
+        }
+    </style>
+    """
+    st.markdown(login_css, unsafe_allow_html=True)
+
+    # Layout Login di Tengah
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    with col2:
+        # Judul di Luar Box
+        st.markdown(
+            '<div class="brand-title">Balinusra Monitoring</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Satu Box Putih Utuh Menggunakan st.container
+        with st.container(border=True):
+            st.markdown(
+                '<div class="login-subtitle">Sign in to start your session</div>',
+                unsafe_allow_html=True,
+            )
+
+            with st.form("login_form"):
+                username_input = st.text_input(
+                    "Username",
+                    placeholder="Username",
+                    label_visibility="collapsed",
+                )
+                password_input = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Password",
+                    label_visibility="collapsed",
+                )
+                submit_button = st.form_submit_button("Sign In")
+
+                if submit_button:
+                    if (
+                        username_input in USERS
+                        and USERS[username_input]["password"] == password_input
+                    ):
+                        st.session_state["logged_in"] = True
+                        st.session_state["role"] = USERS[username_input][
+                            "role"
+                        ]
+                        st.session_state["user_name"] = USERS[username_input][
+                            "name"
+                        ]
+                        st.success("Login berhasil!")
+                        st.rerun()
+                    else:
+                        st.error("Username atau Password salah!")
+
+            st.markdown(
+                '<div class="login-footer">Copyright © 2026 <strong>MiftaxSear</strong>. All rights reserved.</div>',
+                unsafe_allow_html=True,
+            )
+
+
+# Jika belum login, tampilkan hanya halaman login
+if not st.session_state["logged_in"]:
+    show_login_page()
+    st.stop()
+
+
+# -------------------------------------------------------------
+# 4. MEMBACA DATA MASTER EXCEL
+# -------------------------------------------------------------
 @st.cache_data
 def load_data(file_path):
     xls = pd.ExcelFile(file_path)
 
-    # Sheet FRX DT (Utama / Fallback)
+    # Sheet FRX DT
     df_frx_raw = (
         pd.read_excel(xls, "FRX DT")
         if "FRX DT" in xls.sheet_names
         else pd.DataFrame()
     )
 
-    # Sheet SITE BLNS untuk Informasi Mesin
+    # Sheet SITE BLNS
     df_site = (
         pd.read_excel(xls, "SITE BLNS")
         if "SITE BLNS" in xls.sheet_names
         else pd.DataFrame()
     )
 
-    # Sheet MainVisit untuk History Spart
+    # Sheet MainVisit
     df_visit = (
         pd.read_excel(xls, "MainVisit")
         if "MainVisit" in xls.sheet_names
         else pd.DataFrame()
     )
 
-    # Sheet atm total untuk Uptime Bulanan & Total FRX
+    # Sheet atm total
     df_atm_summary = pd.DataFrame()
     if "atm total" in xls.sheet_names:
         try:
@@ -67,7 +217,15 @@ else:
     st.error(f"File '{excel_file}' tidak ditemukan di folder kerja!")
     st.stop()
 
-# 3. Ekstraksi Daftar WSID untuk Input Search Box
+
+# -------------------------------------------------------------
+# 5. SIDEBAR: TATA LETAK (FILTER DI ATAS)
+# -------------------------------------------------------------
+
+# --- A. POSISI PERTAMA: FILTER DASHBOARD ---
+st.sidebar.header("🔍 Filter Dashboard")
+
+# Ekstraksi Daftar WSID untuk Search Box
 list_wsid = []
 if not df_site.empty and "ID" in df_site.columns:
     list_wsid = df_site["ID"].dropna().unique().tolist()
@@ -76,16 +234,45 @@ elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
 elif not df_visit.empty and "ID" in df_visit.columns:
     list_wsid = df_visit["ID"].dropna().unique().tolist()
 
-if "ZRK5" not in list_wsid:
-    list_wsid.insert(0, "ZRK5")
+if "ZTR4" not in list_wsid:
+    list_wsid.insert(0, "ZTR4")
 
-# Sidebar untuk Input Search WSID
-st.sidebar.header("🔍 Filter Dashboard")
 selected_wsid = st.sidebar.selectbox(
     "Pilih / Ketik WSID:", options=list_wsid, index=0
 )
 
-# 4. Informasi Mesin (SITE BLNS)
+st.sidebar.divider()
+
+# --- B. POSISI KEDUA: PANEL ADMIN / VIEWER ---
+if st.session_state["role"] == "admin":
+    st.sidebar.subheader("⚙️ Panel Admin (All Access)")
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload Update Master Excel baru (.xlsx):", type=["xlsx"]
+    )
+    if uploaded_file is not None:
+        with open("MASTER.xlsx", "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        st.cache_data.clear()
+        st.sidebar.success("File MASTER.xlsx berhasil diperbarui!")
+        st.rerun()
+else:
+    st.sidebar.info("👁️ **Mode Viewer**: Anda hanya memiliki akses melihat data.")
+
+st.sidebar.divider()
+
+# --- C. POSISI KETIGA: LOGGED IN USER INFO & LOGOUT ---
+st.sidebar.markdown(f"**Logged in as:** {st.session_state['user_name']}")
+st.sidebar.markdown(f"**Role:** `{st.session_state['role'].upper()}`")
+
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.session_state["role"] = None
+    st.rerun()
+
+
+# -------------------------------------------------------------
+# 6. MEMPROSES INFORMASI MESIN & ENGINEER
+# -------------------------------------------------------------
 info_data = {
     "Wsid": selected_wsid,
     "Ws Name": "-",
@@ -102,6 +289,7 @@ info_data = {
     "Model": "-",
     "Sw Installed": "-",
     "Vendor": "-",
+    "Engineer": "-",
 }
 
 if not df_site.empty and "ID" in df_site.columns:
@@ -120,8 +308,47 @@ if not df_site.empty and "ID" in df_site.columns:
         info_data["Mtype"] = str(row.get("MTYPE", "CRM")).upper()
         info_data["Model"] = str(row.get("MODEL", "-"))
         info_data["Vendor"] = str(row.get("VENDOR", "-"))
+        info_data["Engineer"] = str(row.get("SE_NAME", "-"))
 
-# 5. Nilai Uptime Bulanan & Total FRX
+# Ambil TRX dan SN dari sheet FRX DT (Baris ke-5 / J6 & K6)
+if not df_frx_raw.empty and len(df_frx_raw) >= 5:
+    row_frx_header = df_frx_raw.iloc[4]
+    trx_val = row_frx_header.iloc[9]
+    if pd.notnull(trx_val) and str(trx_val).strip() not in ["", "nan", "None"]:
+        info_data["Trx"] = str(trx_val).strip()
+
+    sn_val = row_frx_header.iloc[10]
+    if pd.notnull(sn_val) and str(sn_val).strip() not in ["", "nan", "None"]:
+        info_data["Sn"] = str(sn_val).strip()
+
+    if info_data["Engineer"] in ["-", "nan", "None", ""]:
+        eng_val = row_frx_header.iloc[1]
+        if pd.notnull(eng_val):
+            info_data["Engineer"] = str(eng_val).strip()
+
+if info_data["Trx"] in ["-", "nan", "None", ""]:
+    if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+        match_atm = df_atm_summary[
+            df_atm_summary["WSID"].astype(str).str.upper()
+            == str(selected_wsid).upper()
+        ]
+        if not match_atm.empty:
+            trx_atm = match_atm.iloc[0].get("TRX", "-")
+            if pd.notnull(trx_atm):
+                info_data["Trx"] = str(trx_atm).strip()
+
+if info_data["Engineer"] in ["-", "nan", "None", ""]:
+    if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+        match_atm = df_atm_summary[
+            df_atm_summary["WSID"].astype(str).str.upper()
+            == str(selected_wsid).upper()
+        ]
+        if not match_atm.empty:
+            se_val = match_atm.iloc[0].get("SE", "-")
+            if pd.notnull(se_val):
+                info_data["Engineer"] = str(se_val).strip()
+
+# Uptime Bulanan & Total FRX
 freq_dt_val = 0
 achieve_ut_float = 0.0
 
@@ -144,7 +371,6 @@ if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
 
 achieve_ut_str = f"{round(achieve_ut_float, 2)}%"
 
-# 6. Logika Status "Tercapai / Tidak tercapai" & Warna
 mtype = info_data["Mtype"]
 target_ut = 99.75 if "ATM" in mtype else 99.20
 is_tercapai = achieve_ut_float >= target_ut
@@ -154,7 +380,7 @@ status_color = "#27ae60" if is_tercapai else "#e74c3c"
 ut_color = status_color
 frx_color = "#e74c3c" if freq_dt_val > 0 else "#27ae60"
 
-# 7. Memproses Data Sheet FRX DT untuk WSID Terpilih (Otomatis dari Sheet Harian)
+# Memproses Sheet Harian
 chart_dates = []
 chart_uptime = []
 table_frx_rows_html = []
@@ -262,7 +488,6 @@ if daily_sheets:
         uptime_val = round(100 - hw_dt, 2) if hw_dt <= 100 else 0.0
         chart_uptime.append(uptime_val)
 
-        # Skema Warna Baris (Merah Muda jika ada DT/Freq, Hijau Muda jika normal)
         row_bg = "#fcdad7" if (hw_freq > 0 or hw_dur > 0) else "#d5f5e3"
         dt_color = "#c0392b" if hw_dt > 0 else "#27ae60"
 
@@ -280,7 +505,7 @@ if daily_sheets:
 
 table_frx_body = "".join(table_frx_rows_html)
 
-# 8. Ekstraksi Data History Spart dari Sheet MainVisit
+# History Spart
 history_rows = []
 if not df_visit.empty:
     match_visit = pd.DataFrame()
@@ -342,7 +567,10 @@ if history_rows:
 else:
     history_html = '<tr><td colspan="3" style="text-align:center; color:#888; padding:15px;">Tidak ada history penggantian part</td></tr>'
 
-# 9. Render Dashboard HTML
+
+# -------------------------------------------------------------
+# 7. RENDER HTML & DASHBOARD TAMPILAN UTAMA
+# -------------------------------------------------------------
 html_code = f"""
 <!DOCTYPE html>
 <html lang="id">
@@ -373,12 +601,35 @@ html_code = f"""
         }}
 
         .card {{ background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.08); margin-bottom: 15px; }}
-        .card-header {{ padding: 10px 15px; color: #ffffff; font-weight: bold; display: flex; justify-content: space-between; font-size: 14px; }}
+        .card-header {{ 
+            padding: 10px 15px; 
+            color: #ffffff; 
+            font-weight: bold; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-size: 14px; 
+            cursor: pointer;
+            user-select: none;
+        }}
         
         .card-header.lightblue {{ background-color: #3598db; }}
         .card-header.green {{ background-color: #27ae60; }}
         .card-header.purple {{ background-color: #9b59b6; }}
         .card-header.gold {{ background-color: #f1c40f; color: #000000; }}
+
+        .toggle-arrow {{
+            font-size: 14px;
+            transition: transform 0.2s ease;
+        }}
+
+        .header-engineer-info {{
+            color: #ffff00;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+            text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.5);
+        }}
 
         .info-table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
         .info-table td {{ padding: 7px 12px; border-bottom: 1px solid #eef2f5; }}
@@ -390,7 +641,6 @@ html_code = f"""
         .history-table th {{ background: #f8f9fa; text-align: left; padding: 8px; border-bottom: 2px solid #dee2e6; }}
         .history-table td {{ padding: 8px; border-bottom: 1px solid #eee; }}
 
-        /* Style Tabel Rincian FRX DT Excel */
         .frx-excel-table {{
             width: 100%;
             border-collapse: collapse;
@@ -402,7 +652,6 @@ html_code = f"""
             padding: 4px 2px;
         }}
         
-        /* Header Kolom Menggunakan Warna Hitam (#000000) untuk Font */
         .p02-header-bg {{
             background-color: #f39c12 !important;
             color: #000000 !important;
@@ -419,6 +668,10 @@ html_code = f"""
             max-height: 290px;
             overflow-y: auto;
             overflow-x: auto;
+        }}
+
+        .collapsible-content {{
+            display: block;
         }}
     </style>
 </head>
@@ -442,94 +695,122 @@ html_code = f"""
         
         <!-- Panel 1: Informasi Mesin -->
         <div class="card">
-            <div class="card-header lightblue">
-                Informasi Mesin <span>▼</span>
+            <div class="card-header lightblue" onclick="toggleCard('infoContent', 'arrow1')">
+                <span>Informasi Mesin</span>
+                <span id="arrow1" class="toggle-arrow">▼</span>
             </div>
-            <table class="info-table">
-                <tr><td>Wsid</td><td>{info_data['Wsid']}</td></tr>
-                <tr><td>Ws Name</td><td>{info_data['Ws Name']}</td></tr>
-                <tr><td>Trx</td><td>{info_data['Trx']}</td></tr>
-                <tr><td>Serial No</td><td>{info_data['Serial No']}</td></tr>
-                <tr><td>Sn</td><td>{info_data['Sn']}</td></tr>
-                <tr><td>Address</td><td>{info_data['Address']}</td></tr>
-                <tr><td>City</td><td>{info_data['City']}</td></tr>
-                <tr><td>Province</td><td>{info_data['Province']}</td></tr>
-                <tr><td>Island</td><td>{info_data['Island']}</td></tr>
-                <tr><td>Location</td><td>{info_data['Location']}</td></tr>
-                <tr><td>Vip</td><td>{info_data['Vip']}</td></tr>
-                <tr><td>Mtype</td><td>{info_data['Mtype']}</td></tr>
-                <tr><td>Model</td><td>{info_data['Model']}</td></tr>
-                <tr><td>Sw Installed</td><td>{info_data['Sw Installed']}</td></tr>
-                <tr><td>Vendor</td><td>{info_data['Vendor']}</td></tr>
-            </table>
+            <div id="infoContent" class="collapsible-content">
+                <table class="info-table">
+                    <tr><td>Wsid</td><td>{info_data['Wsid']}</td></tr>
+                    <tr><td>Ws Name</td><td>{info_data['Ws Name']}</td></tr>
+                    <tr><td>Trx</td><td>{info_data['Trx']}</td></tr>
+                    <tr><td>Serial No</td><td>{info_data['Serial No']}</td></tr>
+                    <tr><td>Sn</td><td>{info_data['Sn']}</td></tr>
+                    <tr><td>Address</td><td>{info_data['Address']}</td></tr>
+                    <tr><td>City</td><td>{info_data['City']}</td></tr>
+                    <tr><td>Province</td><td>{info_data['Province']}</td></tr>
+                    <tr><td>Island</td><td>{info_data['Island']}</td></tr>
+                    <tr><td>Location</td><td>{info_data['Location']}</td></tr>
+                    <tr><td>Vip</td><td>{info_data['Vip']}</td></tr>
+                    <tr><td>Mtype</td><td>{info_data['Mtype']}</td></tr>
+                    <tr><td>Model</td><td>{info_data['Model']}</td></tr>
+                    <tr><td>Sw Installed</td><td>{info_data['Sw Installed']}</td></tr>
+                    <tr><td>Vendor</td><td>{info_data['Vendor']}</td></tr>
+                </table>
+            </div>
         </div>
 
         <!-- Panel 2: Grafik Uptime & Tabel Uptime Harian -->
         <div>
             <!-- Grafik Line Uptime Harian -->
             <div class="card">
-                <div class="card-header green">
-                    Grafik Uptime Harian <span>▼</span>
+                <div class="card-header green" onclick="toggleCard('chartContent', 'arrow2')">
+                    <span>Grafik Uptime Harian</span>
+                    <span id="arrow2" class="toggle-arrow">▼</span>
                 </div>
-                <div class="chart-container">
-                    <canvas id="lineChart" height="100"></canvas>
+                <div id="chartContent" class="collapsible-content">
+                    <div class="chart-container">
+                        <canvas id="lineChart" height="100"></canvas>
+                    </div>
                 </div>
             </div>
 
-            <!-- Tabel Uptime Harian (Font Header Hitam) -->
+            <!-- Tabel Uptime Harian -->
             <div class="card">
-                <div class="card-header purple">
-                    Uptime Harian <span>▼</span>
+                <div class="card-header purple" onclick="toggleCard('tableContent', 'arrow3')">
+                    <div>
+                        <span>Uptime Harian</span>
+                        <span class="header-engineer-info">| {info_data['Wsid']} | {info_data['Engineer']}</span>
+                    </div>
+                    <span id="arrow3" class="toggle-arrow">▼</span>
                 </div>
-                <div class="table-scroll">
-                    <table class="frx-excel-table">
-                        <thead>
-                            <tr class="p02-header-bg">
-                                <th rowspan="2" style="color: #000000;">Tgl</th>
-                                <th colspan="3" style="color: #000000;">HW TOTAL</th>
-                                <th colspan="3" style="color: #000000;">P01 - Pick Modul</th>
-                                <th colspan="3" style="color: #000000;">P02 - Presenter</th>
-                                <th colspan="3" style="color: #000000;">P03 - Reject</th>
-                                <th colspan="3" style="color: #000000;">P04 - Card Reader</th>
-                            </tr>
-                            <tr class="p02-sub-header">
-                                <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {table_frx_body}
-                        </tbody>
-                    </table>
+                <div id="tableContent" class="collapsible-content">
+                    <div class="table-scroll">
+                        <table class="frx-excel-table">
+                            <thead>
+                                <tr class="p02-header-bg">
+                                    <th rowspan="2" style="color: #000000;">Tgl</th>
+                                    <th colspan="3" style="color: #000000;">HW TOTAL</th>
+                                    <th colspan="3" style="color: #000000;">P01 - Pick Modul</th>
+                                    <th colspan="3" style="color: #000000;">P02 - Presenter</th>
+                                    <th colspan="3" style="color: #000000;">P03 - Reject</th>
+                                    <th colspan="3" style="color: #000000;">P04 - Card Reader</th>
+                                </tr>
+                                <tr class="p02-sub-header">
+                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
+                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
+                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
+                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
+                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {table_frx_body}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Panel 3: History Spart -->
         <div class="card">
-            <div class="card-header gold">
-                History Spart <span>▼</span>
+            <div class="card-header gold" onclick="toggleCard('historyContent', 'arrow4')">
+                <span>History Spart</span>
+                <span id="arrow4" class="toggle-arrow">▼</span>
             </div>
-            <table class="history-table">
-                <thead>
-                    <tr>
-                        <th>Start Time</th>
-                        <th>End Time</th>
-                        <th>SPart</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {history_html}
-                </tbody>
-            </table>
+            <div id="historyContent" class="collapsible-content">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>SPart</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {history_html}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
     </div>
 
     <script>
+        function toggleCard(contentId, arrowId) {{
+            const content = document.getElementById(contentId);
+            const arrow = document.getElementById(arrowId);
+            
+            if (content.style.display === "none") {{
+                content.style.display = "block";
+                arrow.innerText = "▼";
+            }} else {{
+                content.style.display = "none";
+                arrow.innerText = "▲";
+            }}
+        }}
+
         const dates = {json.dumps(chart_dates)};
         const uptimeData = {json.dumps(chart_uptime)};
         
@@ -554,4 +835,4 @@ html_code = f"""
 </html>
 """
 
-st.components.v1.html(html_code, height=920, scrolling=True)
+st.components.v1.html(html_code, height=950, scrolling=True)
