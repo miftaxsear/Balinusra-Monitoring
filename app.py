@@ -1,5 +1,6 @@
 import json
 import os
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -30,14 +31,12 @@ if "logged_in" not in st.session_state:
 def show_login_page():
     login_css = """
     <style>
-        /* Sembunyikan Header bawaan Streamlit */
         header {visibility: hidden;}
         .block-container {
             padding-top: 3rem !important;
             padding-bottom: 2rem !important;
         }
         
-        /* Judul Utama di Luar Box */
         .brand-title {
             font-family: 'Lucida Calligraphy', 'Lucida Handwriting', 'Apple Chancery', cursive;
             color: #27ae60;
@@ -47,7 +46,6 @@ def show_login_page():
             margin-bottom: 12px;
         }
 
-        /* Teks Subtitle */
         .login-subtitle {
             text-align: center;
             color: #666666;
@@ -55,7 +53,6 @@ def show_login_page():
             margin-bottom: 18px;
         }
 
-        /* Styling Input Field Biru ala MyDatindo */
         div[data-baseweb="input"] {
             background-color: #eef4fb !important;
             border: 1px solid #b8d3f2 !important;
@@ -67,7 +64,6 @@ def show_login_page():
             font-size: 14px !important;
         }
 
-        /* Styling Tombol Sign In Biru */
         div.stButton > button {
             width: 100% !important;
             background-color: #3488b5 !important;
@@ -85,7 +81,6 @@ def show_login_page():
             color: #ffffff !important;
         }
 
-        /* Footer Copyright */
         .login-footer {
             margin-top: 22px;
             font-size: 11px;
@@ -96,16 +91,13 @@ def show_login_page():
     """
     st.markdown(login_css, unsafe_allow_html=True)
 
-    # Layout Login di Tengah
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        # Judul di Luar Box
         st.markdown(
             '<div class="brand-title">Balinusra Monitoring</div>',
             unsafe_allow_html=True,
         )
 
-        # Satu Box Putih Utuh Menggunakan st.container
         with st.container(border=True):
             st.markdown(
                 '<div class="login-subtitle">Sign in to start your session</div>',
@@ -149,41 +141,36 @@ def show_login_page():
             )
 
 
-# Jika belum login, tampilkan hanya halaman login
 if not st.session_state["logged_in"]:
     show_login_page()
     st.stop()
 
 
 # -------------------------------------------------------------
-# 4. MEMBACA DATA MASTER EXCEL
+# 4. FUNGSI MEMBACA DATA MASTER EXCEL
 # -------------------------------------------------------------
 @st.cache_data
 def load_data(file_path):
     xls = pd.ExcelFile(file_path)
 
-    # Sheet FRX DT
     df_frx_raw = (
         pd.read_excel(xls, "FRX DT")
         if "FRX DT" in xls.sheet_names
         else pd.DataFrame()
     )
 
-    # Sheet SITE BLNS
     df_site = (
         pd.read_excel(xls, "SITE BLNS")
         if "SITE BLNS" in xls.sheet_names
         else pd.DataFrame()
     )
 
-    # Sheet MainVisit
     df_visit = (
         pd.read_excel(xls, "MainVisit")
         if "MainVisit" in xls.sheet_names
         else pd.DataFrame()
     )
 
-    # Sheet atm total
     df_atm_summary = pd.DataFrame()
     if "atm total" in xls.sheet_names:
         try:
@@ -191,7 +178,6 @@ def load_data(file_path):
         except:
             pass
 
-    # Membaca Sheet Harian '1', '2', ..., '31'
     daily_sheets = {}
     num_sheets = [s for s in xls.sheet_names if s.isdigit()]
     num_sheets.sort(key=lambda x: int(x))
@@ -204,63 +190,101 @@ def load_data(file_path):
         except:
             pass
 
-    return df_frx_raw, df_site, df_visit, df_atm_summary, daily_sheets
-
-
-excel_file = "MASTER.xlsx"
-
-if os.path.exists(excel_file):
-    df_frx_raw, df_site, df_visit, df_atm_summary, daily_sheets = load_data(
-        excel_file
+    return (
+        df_frx_raw,
+        df_site,
+        df_visit,
+        df_atm_summary,
+        daily_sheets,
     )
-else:
-    st.error(f"File '{excel_file}' tidak ditemukan di folder kerja!")
-    st.stop()
 
 
 # -------------------------------------------------------------
-# 5. SIDEBAR: TATA LETAK (FILTER DI ATAS)
+# 5. SIDEBAR: FILTER DASHBOARD & NAVIGASI MENU
 # -------------------------------------------------------------
-
-# --- A. POSISI PERTAMA: FILTER DASHBOARD ---
 st.sidebar.header("🔍 Filter Dashboard")
 
-# Ekstraksi Daftar WSID untuk Search Box
-list_wsid = []
-if not df_site.empty and "ID" in df_site.columns:
-    list_wsid = df_site["ID"].dropna().unique().tolist()
-elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
-    list_wsid = df_atm_summary["WSID"].dropna().unique().tolist()
-elif not df_visit.empty and "ID" in df_visit.columns:
-    list_wsid = df_visit["ID"].dropna().unique().tolist()
-
-if "ZTR4" not in list_wsid:
-    list_wsid.insert(0, "ZTR4")
-
-selected_wsid = st.sidebar.selectbox(
-    "Pilih / Ketik WSID:", options=list_wsid, index=0
+menu_option = st.sidebar.radio(
+    "Pilih Tampilan Dashboard:",
+    options=[
+        "Uptime FRX DT (WSID)",
+        "Uptime Harian",
+        "Uptime CSE by Tipe Mesin",
+        "Uptime PKT by Tipe Mesin",
+    ],
+    index=1,  # Default ke Uptime Harian
 )
 
 st.sidebar.divider()
 
-# --- B. POSISI KEDUA: PANEL ADMIN / VIEWER ---
+month_options = [f"2026-{m:02d}" for m in range(1, 13)]
+selected_month = st.sidebar.selectbox(
+    "Pilih Bulan:",
+    options=month_options,
+    index=8,  # Default 2026-09
+)
+
+target_excel_file = f"MASTER_{selected_month}.xlsx"
+
+if not os.path.exists(target_excel_file):
+    if os.path.exists("MASTER.xlsx"):
+        target_excel_file = "MASTER.xlsx"
+    else:
+        st.error(
+            f"File '{target_excel_file}' atau 'MASTER.xlsx' tidak ditemukan di server!"
+        )
+        st.stop()
+
+(
+    df_frx_raw,
+    df_site,
+    df_visit,
+    df_atm_summary,
+    daily_sheets,
+) = load_data(target_excel_file)
+
+selected_wsid = "ZTR4"
+if menu_option == "Uptime FRX DT (WSID)":
+    list_wsid = []
+    if not df_site.empty and "ID" in df_site.columns:
+        list_wsid = df_site["ID"].dropna().unique().tolist()
+    elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+        list_wsid = df_atm_summary["WSID"].dropna().unique().tolist()
+
+    if "ZTR4" not in list_wsid and list_wsid:
+        list_wsid.insert(0, "ZTR4")
+
+    if list_wsid:
+        selected_wsid = st.sidebar.selectbox(
+            "Pilih / Ketik WSID:", options=list_wsid, index=0
+        )
+
+st.sidebar.divider()
+
 if st.session_state["role"] == "admin":
     st.sidebar.subheader("⚙️ Panel Admin (All Access)")
-    uploaded_file = st.sidebar.file_uploader(
-        "Upload Update Master Excel baru (.xlsx):", type=["xlsx"]
+    admin_upload_month = st.sidebar.selectbox(
+        "Upload Master Excel untuk Bulan:",
+        options=month_options,
+        index=month_options.index(selected_month),
     )
+
+    uploaded_file = st.sidebar.file_uploader(
+        f"Upload File Master ({admin_upload_month}):", type=["xlsx"]
+    )
+
     if uploaded_file is not None:
-        with open("MASTER.xlsx", "wb") as f:
+        save_file_name = f"MASTER_{admin_upload_month}.xlsx"
+        with open(save_file_name, "wb") as f:
             f.write(uploaded_file.getbuffer())
         st.cache_data.clear()
-        st.sidebar.success("File MASTER.xlsx berhasil diperbarui!")
+        st.sidebar.success(f"File {save_file_name} berhasil diperbarui!")
         st.rerun()
 else:
     st.sidebar.info("👁️ **Mode Viewer**: Anda hanya memiliki akses melihat data.")
 
 st.sidebar.divider()
 
-# --- C. POSISI KETIGA: LOGGED IN USER INFO & LOGOUT ---
 st.sidebar.markdown(f"**Logged in as:** {st.session_state['user_name']}")
 st.sidebar.markdown(f"**Role:** `{st.session_state['role'].upper()}`")
 
@@ -270,437 +294,281 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 
-# -------------------------------------------------------------
-# 6. MEMPROSES INFORMASI MESIN & ENGINEER
-# -------------------------------------------------------------
-info_data = {
-    "Wsid": selected_wsid,
-    "Ws Name": "-",
-    "Trx": "-",
-    "Serial No": "-",
-    "Sn": "-",
-    "Address": "-",
-    "City": "-",
-    "Province": "-",
-    "Island": "-",
-    "Location": "-",
-    "Vip": "0",
-    "Mtype": "CRM",
-    "Model": "-",
-    "Sw Installed": "-",
-    "Vendor": "-",
-    "Engineer": "-",
-}
+# =============================================================
+# HALAMAN 1: UPTIME FRX DT (PER WSID)
+# =============================================================
+if menu_option == "Uptime FRX DT (WSID)":
 
-if not df_site.empty and "ID" in df_site.columns:
-    match_site = df_site[
-        df_site["ID"].astype(str).str.upper() == str(selected_wsid).upper()
-    ]
-    if not match_site.empty:
-        row = match_site.iloc[0]
-        info_data["Ws Name"] = str(row.get("WS_NAME", "-"))
-        info_data["Serial No"] = str(row.get("SERIAL_NO", "-"))
-        info_data["Address"] = str(row.get("ADDRESS", "-"))
-        info_data["City"] = str(row.get("CITY", "-"))
-        info_data["Province"] = str(row.get("PROVINCE", "-"))
-        info_data["Island"] = str(row.get("ISLAND", "-"))
-        info_data["Location"] = str(row.get("LOCATION", "-"))
-        info_data["Mtype"] = str(row.get("MTYPE", "CRM")).upper()
-        info_data["Model"] = str(row.get("MODEL", "-"))
-        info_data["Vendor"] = str(row.get("VENDOR", "-"))
-        info_data["Engineer"] = str(row.get("SE_NAME", "-"))
+    info_data = {
+        "Wsid": selected_wsid,
+        "Ws Name": "-",
+        "Trx": "-",
+        "Serial No": "-",
+        "Sn": "-",
+        "Address": "-",
+        "City": "-",
+        "Province": "-",
+        "Island": "-",
+        "Location": "-",
+        "Vip": "0",
+        "Mtype": "CRM",
+        "Model": "-",
+        "Sw Installed": "-",
+        "Vendor": "-",
+        "Engineer": "-",
+    }
 
-# Ambil TRX dan SN dari sheet FRX DT (Baris ke-5 / J6 & K6)
-if not df_frx_raw.empty and len(df_frx_raw) >= 5:
-    row_frx_header = df_frx_raw.iloc[4]
-    trx_val = row_frx_header.iloc[9]
-    if pd.notnull(trx_val) and str(trx_val).strip() not in ["", "nan", "None"]:
-        info_data["Trx"] = str(trx_val).strip()
-
-    sn_val = row_frx_header.iloc[10]
-    if pd.notnull(sn_val) and str(sn_val).strip() not in ["", "nan", "None"]:
-        info_data["Sn"] = str(sn_val).strip()
-
-    if info_data["Engineer"] in ["-", "nan", "None", ""]:
-        eng_val = row_frx_header.iloc[1]
-        if pd.notnull(eng_val):
-            info_data["Engineer"] = str(eng_val).strip()
-
-if info_data["Trx"] in ["-", "nan", "None", ""]:
-    if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
-        match_atm = df_atm_summary[
-            df_atm_summary["WSID"].astype(str).str.upper()
-            == str(selected_wsid).upper()
+    if not df_site.empty and "ID" in df_site.columns:
+        match_site = df_site[
+            df_site["ID"].astype(str).str.upper() == str(selected_wsid).upper()
         ]
-        if not match_atm.empty:
-            trx_atm = match_atm.iloc[0].get("TRX", "-")
-            if pd.notnull(trx_atm):
-                info_data["Trx"] = str(trx_atm).strip()
+        if not match_site.empty:
+            row = match_site.iloc[0]
+            info_data["Ws Name"] = str(row.get("WS_NAME", "-"))
+            info_data["Serial No"] = str(row.get("SERIAL_NO", "-"))
+            info_data["Address"] = str(row.get("ADDRESS", "-"))
+            info_data["City"] = str(row.get("CITY", "-"))
+            info_data["Province"] = str(row.get("PROVINCE", "-"))
+            info_data["Island"] = str(row.get("ISLAND", "-"))
+            info_data["Location"] = str(row.get("LOCATION", "-"))
+            info_data["Mtype"] = str(row.get("MTYPE", "CRM")).upper()
+            info_data["Model"] = str(row.get("MODEL", "-"))
+            info_data["Vendor"] = str(row.get("VENDOR", "-"))
+            info_data["Engineer"] = str(row.get("SE_NAME", "-"))
 
-if info_data["Engineer"] in ["-", "nan", "None", ""]:
-    if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
-        match_atm = df_atm_summary[
-            df_atm_summary["WSID"].astype(str).str.upper()
-            == str(selected_wsid).upper()
-        ]
-        if not match_atm.empty:
-            se_val = match_atm.iloc[0].get("SE", "-")
-            if pd.notnull(se_val):
-                info_data["Engineer"] = str(se_val).strip()
-
-# Uptime Bulanan & Total FRX
-freq_dt_val = 0
-achieve_ut_float = 0.0
-
-if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
-    match_wsid = df_atm_summary[
-        df_atm_summary["WSID"].astype(str).str.upper()
-        == str(selected_wsid).upper()
-    ]
-    if not match_wsid.empty:
-        row_atm = match_wsid.iloc[0]
-        if "FRX" in row_atm and pd.notnull(row_atm["FRX"]):
-            freq_dt_val = int(float(row_atm["FRX"]))
-        if "UPTIME" in row_atm and pd.notnull(row_atm["UPTIME"]):
-            try:
-                achieve_ut_float = float(row_atm["UPTIME"])
-                if achieve_ut_float <= 1.0:
-                    achieve_ut_float = achieve_ut_float * 100
-            except:
-                pass
-
-achieve_ut_str = f"{round(achieve_ut_float, 2)}%"
-
-mtype = info_data["Mtype"]
-target_ut = 99.75 if "ATM" in mtype else 99.20
-is_tercapai = achieve_ut_float >= target_ut
-
-status_text = "Tercapai" if is_tercapai else "Tidak tercapai"
-status_color = "#27ae60" if is_tercapai else "#e74c3c"
-ut_color = status_color
-frx_color = "#e74c3c" if freq_dt_val > 0 else "#27ae60"
-
-# Memproses Sheet Harian
-chart_dates = []
-chart_uptime = []
-table_frx_rows_html = []
-
-if daily_sheets:
-    sorted_days = sorted(daily_sheets.keys())
-    for d in sorted_days:
-        df_d = daily_sheets[d]
-        row_match = df_d[
-            df_d["WSID"].astype(str).str.upper() == str(selected_wsid).upper()
-        ]
-
-        tgl_str = f"{d:02d}/09/2026"
-        chart_tgl = f"{d:02d}-09"
-        chart_dates.append(chart_tgl)
-
-        if not row_match.empty:
-            r = row_match.iloc[0]
-            hw_freq = (
-                int(float(r.get("FRX", 0)))
-                if pd.notnull(r.get("FRX"))
-                else 0
-            )
-            hw_dur = (
-                int(float(r.get("DUR", 0)))
-                if pd.notnull(r.get("DUR"))
-                else 0
-            )
-            hw_dt = (
-                round(float(r.get("%", 0)), 2)
-                if pd.notnull(r.get("%"))
-                else 0.0
-            )
-
-            p01_freq = (
-                int(float(r.get("FRX.1", 0)))
-                if pd.notnull(r.get("FRX.1"))
-                else 0
-            )
-            p01_dur = (
-                int(float(r.get("DUR.1", 0)))
-                if pd.notnull(r.get("DUR.1"))
-                else 0
-            )
-            p01_dt = (
-                round(float(r.get("%.1", 0)), 2)
-                if pd.notnull(r.get("%.1"))
-                else 0.0
-            )
-
-            p02_freq = (
-                int(float(r.get("FRX.2", 0)))
-                if pd.notnull(r.get("FRX.2"))
-                else 0
-            )
-            p02_dur = (
-                int(float(r.get("DUR.2", 0)))
-                if pd.notnull(r.get("DUR.2"))
-                else 0
-            )
-            p02_dt = (
-                round(float(r.get("%.2", 0)), 2)
-                if pd.notnull(r.get("%.2"))
-                else 0.0
-            )
-
-            p03_freq = (
-                int(float(r.get("FRX.3", 0)))
-                if pd.notnull(r.get("FRX.3"))
-                else 0
-            )
-            p03_dur = (
-                int(float(r.get("DUR.3", 0)))
-                if pd.notnull(r.get("DUR.3"))
-                else 0
-            )
-            p03_dt = (
-                round(float(r.get("%.3", 0)), 2)
-                if pd.notnull(r.get("%.3"))
-                else 0.0
-            )
-
-            p04_freq = (
-                int(float(r.get("FRX.4", 0)))
-                if pd.notnull(r.get("FRX.4"))
-                else 0
-            )
-            p04_dur = (
-                int(float(r.get("DUR.4", 0)))
-                if pd.notnull(r.get("DUR.4"))
-                else 0
-            )
-            p04_dt = (
-                round(float(r.get("%.4", 0)), 2)
-                if pd.notnull(r.get("%.4"))
-                else 0.0
-            )
-        else:
-            hw_freq = hw_dur = hw_dt = 0
-            p01_freq = p01_dur = p01_dt = 0
-            p02_freq = p02_dur = p02_dt = 0
-            p03_freq = p03_dur = p03_dt = 0
-            p04_freq = p04_dur = p04_dt = 0
-
-        uptime_val = round(100 - hw_dt, 2) if hw_dt <= 100 else 0.0
-        chart_uptime.append(uptime_val)
-
-        row_bg = "#fcdad7" if (hw_freq > 0 or hw_dur > 0) else "#d5f5e3"
-        dt_color = "#c0392b" if hw_dt > 0 else "#27ae60"
-
-        row_html = f"""
-        <tr style="background-color: {row_bg}; color: #000000;">
-            <td style="font-weight:bold; text-align:center;">{tgl_str}</td>
-            <td>{hw_freq}</td><td>{hw_dur}</td><td style="color:{dt_color}; font-weight:bold;">{hw_dt}</td>
-            <td>{p01_freq}</td><td>{p01_dur}</td><td>{p01_dt}</td>
-            <td>{p02_freq}</td><td>{p02_dur}</td><td>{p02_dt}</td>
-            <td>{p03_freq}</td><td>{p03_dur}</td><td>{p03_dt}</td>
-            <td>{p04_freq}</td><td>{p04_dur}</td><td>{p04_dt}</td>
-        </tr>
-        """
-        table_frx_rows_html.append(row_html)
-
-table_frx_body = "".join(table_frx_rows_html)
-
-# History Spart
-history_rows = []
-if not df_visit.empty:
-    match_visit = pd.DataFrame()
-    if "ID" in df_visit.columns:
-        match_visit = df_visit[
-            df_visit["ID"].astype(str).str.upper() == str(selected_wsid).upper()
-        ]
-
-    if match_visit.empty and "WSID" in df_visit.columns:
-        match_visit = df_visit[
-            df_visit["WSID"]
-            .astype(str)
-            .str.upper()
-            .str.contains(str(selected_wsid).upper())
-        ]
-
-    for _, vrow in match_visit.iterrows():
-        spart_val = vrow.get("SPART", None)
-        if pd.notnull(spart_val) and str(spart_val).strip() not in [
+    if not df_frx_raw.empty and len(df_frx_raw) >= 5:
+        row_frx_header = df_frx_raw.iloc[4]
+        trx_val = row_frx_header.iloc[9]
+        if pd.notnull(trx_val) and str(trx_val).strip() not in [
             "",
-            "0",
             "nan",
             "None",
         ]:
-            start_time = vrow.get("STARTED", "-")
-            end_time = vrow.get("FINISHED", "-")
+            info_data["Trx"] = str(trx_val).strip()
 
-            if pd.notnull(start_time):
-                try:
-                    start_time = pd.to_datetime(start_time).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                except:
-                    start_time = str(start_time)
+        sn_val = row_frx_header.iloc[10]
+        if pd.notnull(sn_val) and str(sn_val).strip() not in ["", "nan", "None"]:
+            info_data["Sn"] = str(sn_val).strip()
 
-            if pd.notnull(end_time):
-                try:
-                    end_time = pd.to_datetime(end_time).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                except:
-                    end_time = str(end_time)
+        if info_data["Engineer"] in ["-", "nan", "None", ""]:
+            eng_val = row_frx_header.iloc[1]
+            if pd.notnull(eng_val):
+                info_data["Engineer"] = str(eng_val).strip()
 
-            history_rows.append(
-                {
-                    "start": start_time,
-                    "end": end_time,
-                    "spart": str(spart_val).strip(),
-                }
-            )
+    if info_data["Trx"] in ["-", "nan", "None", ""]:
+        if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+            match_atm = df_atm_summary[
+                df_atm_summary["WSID"].astype(str).str.upper()
+                == str(selected_wsid).upper()
+            ]
+            if not match_atm.empty:
+                trx_atm = match_atm.iloc[0].get("TRX", "-")
+                if pd.notnull(trx_atm):
+                    info_data["Trx"] = str(trx_atm).strip()
 
-if history_rows:
-    history_html = "".join(
-        [
-            f"<tr><td>{h['start']}</td><td>{h['end']}</td><td>{h['spart']}</td></tr>"
-            for h in history_rows
+    freq_dt_val = 0
+    achieve_ut_float = 0.0
+
+    if not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+        match_wsid = df_atm_summary[
+            df_atm_summary["WSID"].astype(str).str.upper()
+            == str(selected_wsid).upper()
         ]
+        if not match_wsid.empty:
+            row_atm = match_wsid.iloc[0]
+            if "FRX" in row_atm and pd.notnull(row_atm["FRX"]):
+                freq_dt_val = int(float(row_atm["FRX"]))
+            if "UPTIME" in row_atm and pd.notnull(row_atm["UPTIME"]):
+                try:
+                    achieve_ut_float = float(row_atm["UPTIME"])
+                    if achieve_ut_float <= 1.0:
+                        achieve_ut_float = achieve_ut_float * 100
+                except:
+                    pass
+
+    achieve_ut_str = f"{round(achieve_ut_float, 2)}%"
+    mtype = info_data["Mtype"]
+    target_ut = 99.75 if "ATM" in mtype else 99.20
+    is_tercapai = achieve_ut_float >= target_ut
+
+    status_text = "Tercapai" if is_tercapai else "Tidak tercapai"
+    status_color = "#27ae60" if is_tercapai else "#e74c3c"
+    ut_color = status_color
+    frx_color = "#e74c3c" if freq_dt_val > 0 else "#27ae60"
+
+    chart_dates = []
+    chart_uptime = []
+    table_frx_rows_html = []
+    year_str, month_str = selected_month.split("-")
+
+    if daily_sheets:
+        sorted_days = sorted(daily_sheets.keys())
+        for d in sorted_days:
+            df_d = daily_sheets[d]
+            row_match = df_d[
+                df_d["WSID"].astype(str).str.upper()
+                == str(selected_wsid).upper()
+            ]
+
+            tgl_str = f"{d:02d}/{month_str}/{year_str}"
+            chart_tgl = f"{d:02d}-{month_str}"
+
+            # Cek apakah tanggal ini sudah ada data terisi di sheet
+            has_valid_day_data = False
+            if not row_match.empty:
+                r = row_match.iloc[0]
+                for col_k in ["FRX", "DUR", "%", "FRX.1", "DUR.1", "%.1"]:
+                    val_check = r.get(col_k)
+                    if pd.notnull(val_check) and str(val_check).strip() not in ["", "nan", "None"]:
+                        has_valid_day_data = True
+                        break
+
+            if has_valid_day_data and not row_match.empty:
+                r = row_match.iloc[0]
+                hw_freq = int(float(r.get("FRX", 0))) if pd.notnull(r.get("FRX")) else 0
+                hw_dur = int(float(r.get("DUR", 0))) if pd.notnull(r.get("DUR")) else 0
+                hw_dt = round(float(r.get("%", 0)), 2) if pd.notnull(r.get("%")) else 0.0
+
+                p01_freq = int(float(r.get("FRX.1", 0))) if pd.notnull(r.get("FRX.1")) else 0
+                p01_dur = int(float(r.get("DUR.1", 0))) if pd.notnull(r.get("DUR.1")) else 0
+                p01_dt = round(float(r.get("%.1", 0)), 2) if pd.notnull(r.get("%.1")) else 0.0
+
+                p02_freq = int(float(r.get("FRX.2", 0))) if pd.notnull(r.get("FRX.2")) else 0
+                p02_dur = int(float(r.get("DUR.2", 0))) if pd.notnull(r.get("DUR.2")) else 0
+                p02_dt = round(float(r.get("%.2", 0)), 2) if pd.notnull(r.get("%.2")) else 0.0
+
+                p03_freq = int(float(r.get("FRX.3", 0))) if pd.notnull(r.get("FRX.3")) else 0
+                p03_dur = int(float(r.get("DUR.3", 0))) if pd.notnull(r.get("DUR.3")) else 0
+                p03_dt = round(float(r.get("%.3", 0)), 2) if pd.notnull(r.get("%.3")) else 0.0
+
+                p04_freq = int(float(r.get("FRX.4", 0))) if pd.notnull(r.get("FRX.4")) else 0
+                p04_dur = int(float(r.get("DUR.4", 0))) if pd.notnull(r.get("DUR.4")) else 0
+                p04_dt = round(float(r.get("%.4", 0)), 2) if pd.notnull(r.get("%.4")) else 0.0
+
+                uptime_val = round(100 - hw_dt, 2) if hw_dt <= 100 else 0.0
+                chart_dates.append(chart_tgl)
+                chart_uptime.append(uptime_val)
+
+                row_bg = "#fcdad7" if (hw_freq > 0 or hw_dur > 0) else "#d5f5e3"
+                dt_color = "#c0392b" if hw_dt > 0 else "#27ae60"
+
+                row_html = f"""
+                <tr style="background-color: {row_bg}; color: #000000;">
+                    <td style="font-weight:bold; text-align:center;">{tgl_str}</td>
+                    <td>{hw_freq}</td><td>{hw_dur}</td><td style="color:{dt_color}; font-weight:bold;">{hw_dt}</td>
+                    <td>{p01_freq}</td><td>{p01_dur}</td><td>{p01_dt}</td>
+                    <td>{p02_freq}</td><td>{p02_dur}</td><td>{p02_dt}</td>
+                    <td>{p03_freq}</td><td>{p03_dur}</td><td>{p03_dt}</td>
+                    <td>{p04_freq}</td><td>{p04_dur}</td><td>{p04_dt}</td>
+                </tr>
+                """
+            else:
+                # JIKA DATA BELUM TERISI: BACKGROUND PUTIH (#ffffff) & SEL DIKOSONGKAN
+                row_html = f"""
+                <tr style="background-color: #ffffff; color: #000000;">
+                    <td style="font-weight:bold; text-align:center;">{tgl_str}</td>
+                    <td></td><td></td><td></td>
+                    <td></td><td></td><td></td>
+                    <td></td><td></td><td></td>
+                    <td></td><td></td><td></td>
+                    <td></td><td></td><td></td>
+                </tr>
+                """
+            
+            table_frx_rows_html.append(row_html)
+
+    table_frx_body = "".join(table_frx_rows_html)
+
+    history_rows = []
+    if not df_visit.empty:
+        match_visit = pd.DataFrame()
+        if "ID" in df_visit.columns:
+            match_visit = df_visit[
+                df_visit["ID"].astype(str).str.upper()
+                == str(selected_wsid).upper()
+            ]
+
+        for _, vrow in match_visit.iterrows():
+            spart_val = vrow.get("SPART", None)
+            if pd.notnull(spart_val) and str(spart_val).strip() not in [
+                "",
+                "0",
+                "nan",
+                "None",
+            ]:
+                start_time = vrow.get("STARTED", "-")
+                end_time = vrow.get("FINISHED", "-")
+                history_rows.append(
+                    {
+                        "start": str(start_time),
+                        "end": str(end_time),
+                        "spart": str(spart_val).strip(),
+                    }
+                )
+
+    history_html = (
+        "".join(
+            [
+                f"<tr><td>{h['start']}</td><td>{h['end']}</td><td>{h['spart']}</td></tr>"
+                for h in history_rows
+            ]
+        )
+        if history_rows
+        else '<tr><td colspan="3" style="text-align:center; color:#888; padding:15px;">Tidak ada history penggantian part</td></tr>'
     )
-else:
-    history_html = '<tr><td colspan="3" style="text-align:center; color:#888; padding:15px;">Tidak ada history penggantian part</td></tr>'
 
-
-# -------------------------------------------------------------
-# 7. RENDER HTML & DASHBOARD TAMPILAN UTAMA
-# -------------------------------------------------------------
-html_code = f"""
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }}
-        body {{ background-color: #f4f6f9; padding: 10px; color: #333; }}
-        
-        .top-banner {{
-            background-color: #ffffff;
-            border-radius: 6px;
-            padding: 12px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-            margin-bottom: 15px;
-            font-weight: 600;
-            font-size: 15px;
-        }}
-
-        .dashboard-grid {{
-            display: grid;
-            grid-template-columns: 28% 44% 28%;
-            gap: 15px;
-        }}
-
-        .card {{ background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.08); margin-bottom: 15px; }}
-        .card-header {{ 
-            padding: 10px 15px; 
-            color: #ffffff; 
-            font-weight: bold; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            font-size: 14px; 
-            cursor: pointer;
-            user-select: none;
-        }}
-        
-        .card-header.lightblue {{ background-color: #3598db; }}
-        .card-header.green {{ background-color: #27ae60; }}
-        .card-header.purple {{ background-color: #9b59b6; }}
-        .card-header.gold {{ background-color: #f1c40f; color: #000000; }}
-
-        .toggle-arrow {{
-            font-size: 14px;
-            transition: transform 0.2s ease;
-        }}
-
-        .header-engineer-info {{
-            color: #ffff00;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 8px;
-            text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.5);
-        }}
-
-        .info-table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
-        .info-table td {{ padding: 7px 12px; border-bottom: 1px solid #eef2f5; }}
-        .info-table tr td:first-child {{ font-weight: bold; color: #444; width: 35%; }}
-
-        .chart-container {{ padding: 10px; }}
-
-        .history-table {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
-        .history-table th {{ background: #f8f9fa; text-align: left; padding: 8px; border-bottom: 2px solid #dee2e6; }}
-        .history-table td {{ padding: 8px; border-bottom: 1px solid #eee; }}
-
-        .frx-excel-table {{
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-            text-align: center;
-        }}
-        .frx-excel-table th, .frx-excel-table td {{
-            border: 1px solid #e2b667;
-            padding: 4px 2px;
-        }}
-        
-        .p02-header-bg {{
-            background-color: #f39c12 !important;
-            color: #000000 !important;
-            font-size: 11px;
-            font-weight: bold;
-        }}
-        .p02-sub-header {{
-            background-color: #fdf3e7 !important;
-            color: #000000 !important;
-            font-weight: bold;
-        }}
-        
-        .table-scroll {{
-            max-height: 290px;
-            overflow-y: auto;
-            overflow-x: auto;
-        }}
-
-        .collapsible-content {{
-            display: block;
-        }}
-    </style>
-</head>
-<body>
-
-    <!-- Header Top Banner -->
-    <div class="top-banner">
-        <div>
-            <span>WSID: <strong style="color: #2c3e50; font-size:17px;">{info_data['Wsid']}</strong></span> &nbsp;|&nbsp; 
-            <select><option>2026-09</option></select>
+    html_code = f"""
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            * {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }}
+            body {{ background-color: #f4f6f9; padding: 10px; color: #333; }}
+            
+            .top-banner {{ background-color: #ffffff; border-radius: 6px; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 15px; font-weight: 600; font-size: 15px; }}
+            .dashboard-grid {{ display: grid; grid-template-columns: 28% 44% 28%; gap: 15px; }}
+            .card {{ background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.08); margin-bottom: 15px; }}
+            .card-header {{ padding: 10px 15px; color: #ffffff; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 14px; cursor: pointer; user-select: none; }}
+            .card-header.lightblue {{ background-color: #3598db; }}
+            .card-header.green {{ background-color: #27ae60; }}
+            .card-header.purple {{ background-color: #9b59b6; }}
+            .card-header.gold {{ background-color: #f1c40f; color: #000000; }}
+            .header-engineer-info {{ color: #ffff00; font-size: 11px; font-weight: bold; margin-left: 8px; text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.5); }}
+            .info-table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
+            .info-table td {{ padding: 7px 12px; border-bottom: 1px solid #eef2f5; }}
+            .info-table tr td:first-child {{ font-weight: bold; color: #444; width: 35%; }}
+            .history-table {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
+            .history-table th {{ background: #f8f9fa; text-align: left; padding: 8px; border-bottom: 2px solid #dee2e6; }}
+            .history-table td {{ padding: 8px; border-bottom: 1px solid #eee; }}
+            
+            .frx-excel-table {{ 
+                width: 100%; 
+                border-collapse: collapse; 
+                font-size: 10px; 
+                text-align: center; 
+            }}
+            .frx-excel-table th, .frx-excel-table td {{ 
+                border: 1px solid #e2b667; 
+                padding: 4px 2px;
+            }}
+            
+            /* DIBUAT DENGAN TAMPILAN NORMAL DAN SESUAI DI ATAS HEADER TABEL */
+            .p02-header-bg {{ background-color: #f39c12 !important; color: #000000 !important; font-size: 11px; font-weight: bold; }}
+            .p02-sub-header {{ background-color: #fdf3e7 !important; color: #000000 !important; font-weight: bold; }}
+            .table-scroll {{ max-height: 290px; overflow-y: auto; overflow-x: auto; position: relative; }}
+        </style>
+    </head>
+    <body>
+        <div class="top-banner">
+            <div>WSID: <strong style="color: #2c3e50; font-size:17px;">{info_data['Wsid']}</strong> &nbsp;|&nbsp; <span style="background-color:#eef2f7; padding:4px 10px; border-radius:4px; font-weight:bold; color:#2c3e50;">📅 {selected_month}</span></div>
+            <div>UPTIME BULANAN: {mtype}: <span style="color:{ut_color}; font-weight:bold;">{achieve_ut_str}</span> &nbsp;|&nbsp; STATUS: <span style="color:{status_color}; font-weight:bold;">{status_text}</span> &nbsp;|&nbsp; TOTAL FRX: <strong style="color:{frx_color}; font-size:16px;">{freq_dt_val}</strong></div>
         </div>
-        <div>
-            <span>UPTIME BULANAN: {mtype}: <span style="color:{ut_color}; font-weight:bold;">{achieve_ut_str}</span></span> &nbsp;|&nbsp; 
-            <span>STATUS: <span style="color:{status_color}; font-weight:bold;">{status_text}</span></span> &nbsp;|&nbsp; 
-            <span>TOTAL FRX: <strong style="color:{frx_color}; font-size:16px;">{freq_dt_val}</strong></span>
-        </div>
-    </div>
 
-    <!-- Grid Layout -->
-    <div class="dashboard-grid">
-        
-        <!-- Panel 1: Informasi Mesin -->
-        <div class="card">
-            <div class="card-header lightblue" onclick="toggleCard('infoContent', 'arrow1')">
-                <span>Informasi Mesin</span>
-                <span id="arrow1" class="toggle-arrow">▼</span>
-            </div>
-            <div id="infoContent" class="collapsible-content">
-                <table class="info-table">
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header lightblue" onclick="toggleCard('infoContent', 'arrow1')"><span>Informasi Mesin</span><span id="arrow1">▼</span></div>
+                <div id="infoContent"><table class="info-table">
                     <tr><td>Wsid</td><td>{info_data['Wsid']}</td></tr>
                     <tr><td>Ws Name</td><td>{info_data['Ws Name']}</td></tr>
                     <tr><td>Trx</td><td>{info_data['Trx']}</td></tr>
@@ -716,123 +584,702 @@ html_code = f"""
                     <tr><td>Model</td><td>{info_data['Model']}</td></tr>
                     <tr><td>Sw Installed</td><td>{info_data['Sw Installed']}</td></tr>
                     <tr><td>Vendor</td><td>{info_data['Vendor']}</td></tr>
-                </table>
-            </div>
-        </div>
-
-        <!-- Panel 2: Grafik Uptime & Tabel Uptime Harian -->
-        <div>
-            <!-- Grafik Line Uptime Harian -->
-            <div class="card">
-                <div class="card-header green" onclick="toggleCard('chartContent', 'arrow2')">
-                    <span>Grafik Uptime Harian</span>
-                    <span id="arrow2" class="toggle-arrow">▼</span>
-                </div>
-                <div id="chartContent" class="collapsible-content">
-                    <div class="chart-container">
-                        <canvas id="lineChart" height="100"></canvas>
-                    </div>
-                </div>
+                </table></div>
             </div>
 
-            <!-- Tabel Uptime Harian -->
-            <div class="card">
-                <div class="card-header purple" onclick="toggleCard('tableContent', 'arrow3')">
-                    <div>
-                        <span>Uptime Harian</span>
-                        <span class="header-engineer-info">| {info_data['Wsid']} | {info_data['Engineer']}</span>
-                    </div>
-                    <span id="arrow3" class="toggle-arrow">▼</span>
+            <div>
+                <div class="card">
+                    <div class="card-header green" onclick="toggleCard('chartContent', 'arrow2')"><span>Grafik Uptime Harian</span><span id="arrow2">▼</span></div>
+                    <div id="chartContent" style="padding:10px;"><canvas id="lineChart" height="100"></canvas></div>
                 </div>
-                <div id="tableContent" class="collapsible-content">
-                    <div class="table-scroll">
+
+                <div class="card">
+                    <div class="card-header purple" onclick="toggleCard('tableContent', 'arrow3')">
+                        <div><span>Uptime Harian</span><span class="header-engineer-info">| {info_data['Wsid']} | {info_data['Engineer']}</span></div>
+                        <span id="arrow3">▼</span>
+                    </div>
+                    <div id="tableContent" class="table-scroll">
                         <table class="frx-excel-table">
                             <thead>
                                 <tr class="p02-header-bg">
-                                    <th rowspan="2" style="color: #000000;">Tgl</th>
-                                    <th colspan="3" style="color: #000000;">HW TOTAL</th>
-                                    <th colspan="3" style="color: #000000;">P01 - Pick Modul</th>
-                                    <th colspan="3" style="color: #000000;">P02 - Presenter</th>
-                                    <th colspan="3" style="color: #000000;">P03 - Reject</th>
-                                    <th colspan="3" style="color: #000000;">P04 - Card Reader</th>
+                                    <th rowspan="2">Tgl</th><th colspan="3">HW TOTAL</th><th colspan="3">P01 - Pick Modul</th><th colspan="3">P02 - Presenter</th><th colspan="3">P03 - Reject</th><th colspan="3">P04 - Card Reader</th>
                                 </tr>
                                 <tr class="p02-sub-header">
-                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
-                                    <th style="color: #000000;">Freq</th><th style="color: #000000;">Dur</th><th style="color: #000000;">DT</th>
+                                    <th>Freq</th><th>Dur</th><th>DT</th><th>Freq</th><th>Dur</th><th>DT</th><th>Freq</th><th>Dur</th><th>DT</th><th>Freq</th><th>Dur</th><th>DT</th><th>Freq</th><th>Dur</th><th>DT</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {table_frx_body}
-                            </tbody>
+                            <tbody>{table_frx_body}</tbody>
                         </table>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Panel 3: History Spart -->
-        <div class="card">
-            <div class="card-header gold" onclick="toggleCard('historyContent', 'arrow4')">
-                <span>History Spart</span>
-                <span id="arrow4" class="toggle-arrow">▼</span>
-            </div>
-            <div id="historyContent" class="collapsible-content">
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                            <th>SPart</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {history_html}
-                    </tbody>
-                </table>
+            <div class="card">
+                <div class="card-header gold" onclick="toggleCard('historyContent', 'arrow4')"><span>History Spart</span><span id="arrow4">▼</span></div>
+                <div id="historyContent"><table class="history-table">
+                    <thead><tr><th>Start Time</th><th>End Time</th><th>SPart</th></tr></thead>
+                    <tbody>{history_html}</tbody>
+                </table></div>
             </div>
         </div>
 
-    </div>
-
-    <script>
-        function toggleCard(contentId, arrowId) {{
-            const content = document.getElementById(contentId);
-            const arrow = document.getElementById(arrowId);
-            
-            if (content.style.display === "none") {{
-                content.style.display = "block";
-                arrow.innerText = "▼";
-            }} else {{
-                content.style.display = "none";
-                arrow.innerText = "▲";
+        <script>
+            function toggleCard(cId, aId) {{
+                const c = document.getElementById(cId); const a = document.getElementById(aId);
+                if (c.style.display === "none") {{ c.style.display = "block"; a.innerText = "▼"; }} else {{ c.style.display = "none"; a.innerText = "▲"; }}
             }}
-        }}
+            new Chart(document.getElementById('lineChart'), {{
+                type: 'line',
+                data: {{ labels: {json.dumps(chart_dates)}, datasets: [{{ label: 'Uptime (%)', data: {json.dumps(chart_uptime)}, borderColor: '#27ae60', backgroundColor: 'rgba(39, 174, 96, 0.1)', borderWidth: 2, fill: true }}] }},
+                options: {{ responsive: true, plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ min: 70, max: 100 }} }} }}
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    st.components.v1.html(html_code, height=950, scrolling=True)
 
-        const dates = {json.dumps(chart_dates)};
-        const uptimeData = {json.dumps(chart_uptime)};
+
+# =============================================================
+# HALAMAN 2: UPTIME HARIAN (UPTIME DAILY CRM BCA)
+# =============================================================
+elif menu_option == "Uptime Harian":
+    try:
+        xls = pd.ExcelFile(target_excel_file)
+
+        # Membaca Sheet Ke-2 dari file Excel (Index 1: UPTIME HARIAN)
+        sheet_2_name = (
+            xls.sheet_names[1]
+            if len(xls.sheet_names) > 1
+            else xls.sheet_names[0]
+        )
+        df_sheet2 = pd.read_excel(xls, sheet_name=sheet_2_name, header=None)
+
+        ALL_MONTHS = [
+            "JAN",
+            "FEB",
+            "MAR",
+            "APR",
+            "MEI",
+            "JUN",
+            "JUL",
+            "AGUS",
+            "SEPT",
+            "OKT",
+            "NOV",
+            "DES",
+        ]
+
+        selected_m_num = int(selected_month.split("-")[1])
+        start_idx = max(0, selected_m_num - 3)
+        allowed_months = ALL_MONTHS[start_idx:selected_m_num]
+
+        def build_uptime_daily_crm_bca_html(df, keep_months):
+            html = """
+            <style>
+                .excel-wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+                .excel-container {
+                    max-height: 380px;
+                    overflow-y: auto;
+                    overflow-x: auto;
+                    border: 1px solid #7f8c8d;
+                    border-radius: 2px;
+                    background-color: #ffffff;
+                }
+                .excel-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 11px;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .excel-table td, .excel-table th {
+                    border: 1px solid #a6a6a6;
+                    padding: 3px 5px;
+                    white-space: nowrap;
+                    text-align: center;
+                }
+                .header-row {
+                    background-color: #d9e1f2 !important;
+                    color: #000000 !important;
+                    font-weight: bold;
+                    position: sticky;
+                    top: 0;
+                    z-index: 2;
+                }
+                .col-no { width: 32px !important; text-align: center; }
+                .col-cse { text-align: left !important; padding-left: 6px !important; font-weight: 500; }
+                
+                .row-section-title { 
+                    background-color: #e2efda !important; 
+                    color: #000000 !important;
+                    font-weight: bold; 
+                    text-align: left !important; 
+                    padding: 5px 10px !important; 
+                    font-size: 11px;
+                }
+                
+                .bg-green { background-color: #c6efce !important; color: #006100 !important; font-weight: bold; }
+                .bg-red { background-color: #ffc7ce !important; color: #9c0006 !important; font-weight: bold; }
+                .row-summary { background-color: #f2f2f2 !important; font-weight: bold; }
+            </style>
+            <div class="excel-wrapper">
+            """
+
+            valid_col_indices = []
+            header_row_idx = None
+
+            # 1. Identifikasi Baris Header Utama (NO, CSE, CRM, & 3 Bulan Terakhir)
+            for r_idx, r in df.iterrows():
+                r_vals = [
+                    "" if pd.isnull(x) else str(x).strip().upper()
+                    for x in r.values
+                ]
+                if "NO" in r_vals and "CSE" in r_vals:
+                    header_row_idx = r_idx
+                    for col_i, col_v in enumerate(r_vals):
+                        if col_i in [0, 1, 2]:  # Kolom NO, CSE, CRM
+                            valid_col_indices.append(col_i)
+                        elif col_v in ALL_MONTHS:
+                            if col_v in keep_months:
+                                valid_col_indices.append(col_i)
+                    break
+
+            # 2. PENGECEKAN KETAT KOLOM TANGGAL HARIAN (1 S/D 31):
+            if header_row_idx is not None:
+                header_vals = [
+                    "" if pd.isnull(x) else str(x).strip().upper()
+                    for x in df.iloc[header_row_idx].values
+                ]
+
+                cse_start_row = header_row_idx + 1
+                cse_end_row = len(df)
+                for r_i in range(cse_start_row, len(df)):
+                    r_txt = " ".join([str(x).upper() for x in df.iloc[r_i].values if pd.notnull(x)])
+                    if "TOTAL" in r_txt or "PENGELOLA" in r_txt or "BALI NUSRA" in r_txt:
+                        cse_end_row = r_i
+                        break
+
+                for col_i in range(len(header_vals)):
+                    if col_i in valid_col_indices:
+                        continue
+
+                    col_head_str = header_vals[col_i]
+
+                    is_day_col = False
+                    try:
+                        f_v = float(col_head_str)
+                        if 1 <= f_v <= 31:
+                            is_day_col = True
+                    except:
+                        pass
+
+                    if is_day_col:
+                        has_real_data = False
+                        for r_idx in range(cse_start_row, cse_end_row):
+                            cell_val = df.iloc[r_idx, col_i]
+                            if pd.notnull(cell_val):
+                                s_val = str(cell_val).strip().upper()
+                                if s_val not in ["", "#DIV/0!", "NAN", "NONE"]:
+                                    try:
+                                        if float(s_val) > 0:
+                                            has_real_data = True
+                                            break
+                                    except:
+                                        has_real_data = True
+                                        break
+
+                        if has_real_data:
+                            valid_col_indices.append(col_i)
+
+            # MEMISAHKAN BARIS ENGINEER DAN PENGELOLA
+            rows_engineer = []
+            rows_pengelola = []
+            current_section = "ENGINEER"
+
+            for row_idx, row in df.iterrows():
+                row_vals = ["" if pd.isnull(x) else str(x).strip() for x in row.values]
+                if not any(row_vals):
+                    continue
+                row_str = " ".join([v.upper() for v in row_vals])
+
+                if row_idx == 0 and "UPTIME DAILY" in row_str:
+                    title_text = [v for v in row_vals if v != ""][0]
+                    st.markdown(
+                        f"<h4 style='margin-bottom: 10px; color: #2c3e50;'>{title_text}</h4>",
+                        unsafe_allow_html=True,
+                    )
+                    continue
+
+                if "ENGINEER" in row_str or "UT :" in row_str:
+                    continue
+
+                if "PENGELOLA" in row_str:
+                    current_section = "PENGELOLA"
+                    continue
+
+                if current_section == "ENGINEER":
+                    rows_engineer.append((row_idx, row_vals, row_str))
+                else:
+                    rows_pengelola.append((row_idx, row_vals, row_str))
+
+            def render_section_table(title, rows_list):
+                sec_html = f'<div class="excel-container"><table class="excel-table"><tbody>'
+                sec_html += f'<tr><td colspan="{len(valid_col_indices)}" class="row-section-title">{title}</td></tr>'
+
+                for row_idx, row_vals, row_str in rows_list:
+                    if "NO" in row_vals and "CSE" in row_vals:
+                        sec_html += '<tr class="header-row">'
+                        for col_idx in valid_col_indices:
+                            v = row_vals[col_idx] if col_idx < len(row_vals) else ""
+                            if v in ["#DIV/0!", "nan", "None"]:
+                                v = ""
+                            try:
+                                num_v = float(v)
+                                if num_v.is_integer():
+                                    v = str(int(num_v))
+                            except:
+                                pass
+
+                            cls = "col-no" if col_idx == 0 else ("col-cse" if col_idx == 1 else "")
+                            sec_html += f'<td class="{cls}">{v}</td>'
+                        sec_html += "</tr>"
+                        continue
+
+                    is_total = "TOTAL" in row_str
+                    is_id_tidak_tercapai = "ID TIDAK TERCAPAI" in row_str
+
+                    tr_class = ' class="row-summary"' if (is_total or is_id_tidak_tercapai) else ""
+                    sec_html += f"<tr{tr_class}>"
+
+                    for col_idx in valid_col_indices:
+                        val = row_vals[col_idx] if col_idx < len(row_vals) else ""
+
+                        if val == "" or val in ["#DIV/0!", "nan", "None"]:
+                            sec_html += "<td></td>"
+                            continue
+
+                        cell_cls = []
+                        if col_idx == 0:
+                            cell_cls.append("col-no")
+                        elif col_idx == 1:
+                            cell_cls.append("col-cse")
+
+                        display_val = val
+                        try:
+                            num_val = float(val)
+                            if is_id_tidak_tercapai:
+                                display_val = str(int(round(num_val)))
+                                cell_cls.append("bg-red")
+                            elif 0 < num_val <= 100 and col_idx >= 3:
+                                display_val = f"{num_val:.2f}"
+                                if num_val >= 99.20:
+                                    cell_cls.append("bg-green")
+                                else:
+                                    cell_cls.append("bg-red")
+                            elif num_val.is_integer():
+                                display_val = str(int(num_val))
+                            else:
+                                display_val = f"{num_val:.2f}"
+                        except:
+                            pass
+
+                        cls_str = f' class="{" ".join(cell_cls)}"' if cell_cls else ""
+                        sec_html += f"<td{cls_str}>{display_val}</td>"
+
+                    sec_html += "</tr>"
+
+                sec_html += "</tbody></table></div>"
+                return sec_html
+
+            # TABEL 1: ENGINEER (Slider Horizontal Terpisah)
+            html += render_section_table("ENGINEER", rows_engineer)
+
+            # TABEL 2: PENGELOLA (Slider Horizontal Terpisah)
+            if rows_pengelola:
+                html += render_section_table("PENGELOLA", rows_pengelola)
+
+            html += "</div>"
+            return html
+
+        table_html = build_uptime_daily_crm_bca_html(
+            df_sheet2, allowed_months
+        )
+        st.components.v1.html(table_html, height=780, scrolling=True)
+
+    except Exception as e:
+        st.error(
+            f"Terjadi kesalahan saat memproses data UPTIME DAILY CRM BCA: {e}"
+        )
+
+
+# =============================================================
+# HALAMAN 3: UPTIME CSE BY TIPE MESIN
+# =============================================================
+elif menu_option == "Uptime CSE by Tipe Mesin":
+    st.markdown(
+        f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📊 Uptime CSE by Tipe Mesin ({selected_month})</h4>",
+        unsafe_allow_html=True,
+    )
+
+    try:
+        xls = pd.ExcelFile(target_excel_file)
+        target_sheet = None
+        for s in xls.sheet_names:
+            if s.upper().strip() in [
+                "BALI NUSRA",
+                "UPTIME HARIAN",
+                "UPTIME CSE",
+            ]:
+                target_sheet = s
+                break
+
+        if target_sheet:
+            df_a15 = pd.read_excel(xls, target_sheet, skiprows=14, header=None)
+
+            def build_exact_excel_html(df):
+                html = """
+                <style>
+                    .excel-container {
+                        max-height: 750px;
+                        overflow-y: auto;
+                        overflow-x: auto;
+                        border: 1px solid #7f8c8d;
+                        border-radius: 2px;
+                        background-color: #ffffff;
+                    }
+                    .excel-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 11px;
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    }
+                    .excel-table td, .excel-table th {
+                        border: 1px solid #a6a6a6;
+                        padding: 4px 6px;
+                        white-space: nowrap;
+                    }
+                    
+                    .col-no { width: 32px !important; text-align: center; }
+                    .col-cse { width: 160px !important; text-align: left; padding-left: 6px !important; }
+                    
+                    .header-excel {
+                        background-color: #8ea9db !important;
+                        color: #000000 !important;
+                        font-weight: bold;
+                        text-align: center;
+                        position: sticky;
+                        top: 0;
+                        z-index: 2;
+                    }
+
+                    .title-green-excel {
+                        background-color: #c6efce !important;
+                        color: #000000 !important;
+                        font-weight: bold;
+                        text-align: center;
+                        font-size: 12px;
+                    }
+
+                    .row-total {
+                        background-color: #d9e1f2 !important;
+                        font-weight: bold;
+                    }
+
+                    .text-cse-red { color: #c00000 !important; font-weight: bold !important; }
+                    .text-cse-black { color: #000000 !important; font-weight: normal !important; }
+                    
+                    .text-red { color: #c00000 !important; font-weight: bold; }
+                    .text-green { color: #008000 !important; font-weight: bold; }
+                    .bg-pink-red { background-color: #ffc7ce !important; color: #9c0006 !important; font-weight: bold; text-align: center; }
+                    .bg-light-green { background-color: #c6efce !important; color: #006100 !important; font-weight: bold; text-align: center; }
+                    .center { text-align: center; }
+                </style>
+                <div class="excel-container">
+                <table class="excel-table">
+                    <tbody>
+                """
+
+                for _, row in df.iterrows():
+                    row_vals = [
+                        "" if pd.isnull(x) else str(x).strip()
+                        for x in row.values
+                    ]
+
+                    if not any(row_vals):
+                        continue
+
+                    row_str = " ".join([v.upper() for v in row_vals])
+
+                    if "UPTIME" in row_str:
+                        title_text = [v for v in row_vals if v != ""][0]
+                        html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
+                        continue
+
+                    if "NO" in row_vals and ("CSE" in row_vals or "PROVINSI" in row_vals):
+                        html += '<tr class="header-excel">'
+                        for col_idx, v in enumerate(row_vals[:9]):
+                            cls = "col-no" if col_idx == 0 else ("col-cse" if col_idx == 1 else "center")
+                            html += f'<td class="{cls}">{v}</td>'
+                        html += "</tr>"
+                        continue
+
+                    achieve_ut_val = None
+                    try:
+                        if len(row_vals) > 7 and row_vals[7] not in ["", "#DIV/0!", "nan", "None"]:
+                            achieve_ut_val = float(row_vals[7])
+                    except:
+                        pass
+
+                    is_cse_red = (achieve_ut_val is not None) and (achieve_ut_val < 99.20)
+
+                    is_total = "TOTAL" in row_str
+                    tr_class = ' class="row-total"' if is_total else ""
+                    html += f"<tr{tr_class}>"
+
+                    for col_idx, val in enumerate(row_vals[:9]):
+                        if val == "" or val in ["#DIV/0!", "nan", "None"]:
+                            html += "<td></td>"
+                            continue
+
+                        cell_cls = []
+                        if col_idx == 0:
+                            cell_cls.append("col-no")
+                        elif col_idx == 1:
+                            cell_cls.append("col-cse")
+                            if not is_total:
+                                if is_cse_red:
+                                    cell_cls.append("text-cse-red")
+                                else:
+                                    cell_cls.append("text-cse-black")
+                        else:
+                            cell_cls.append("center")
+
+                        display_val = val
+                        try:
+                            num_val = float(val)
+                            if col_idx == 7:
+                                display_val = f"{num_val:.2f}"
+                                cell_cls.append(
+                                    "bg-light-green"
+                                    if num_val >= 99.20
+                                    else "bg-pink-red"
+                                )
+                            elif col_idx == 8:
+                                display_val = f"{num_val:.2f}"
+                                cell_cls.append(
+                                    "text-red"
+                                    if num_val > 0.80
+                                    else "text-green"
+                                )
+                            elif num_val.is_integer():
+                                display_val = str(int(num_val))
+                            else:
+                                display_val = f"{num_val:.2f}"
+                        except:
+                            pass
+
+                        cls_str = (
+                            f' class="{" ".join(cell_cls)}"'
+                            if cell_cls
+                            else ""
+                        )
+                        html += f"<td{cls_str}>{display_val}</td>"
+
+                    html += "</tr>"
+
+                html += "</tbody></table></div>"
+                return html
+
+            table_html = build_exact_excel_html(df_a15)
+            st.components.v1.html(table_html, height=750, scrolling=True)
+        else:
+            st.error(f"Sheet tidak ditemukan di {target_excel_file}!")
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat memproses data: {e}")
+
+
+# =============================================================
+# HALAMAN 4: UPTIME PKT BY TIPE MESIN (KHUSUS SHEET KE-4: PKT TIPE MESIN)
+# =============================================================
+elif menu_option == "Uptime PKT by Tipe Mesin":
+    st.markdown(
+        f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📊 Uptime PKT by Tipe Mesin ({selected_month})</h4>",
+        unsafe_allow_html=True,
+    )
+
+    try:
+        xls = pd.ExcelFile(target_excel_file)
         
-        new Chart(document.getElementById('lineChart'), {{
-            type: 'line',
-            data: {{
-                labels: dates,
-                datasets: [{{
-                    label: 'Uptime (%)',
-                    data: uptimeData,
-                    borderColor: '#27ae60',
-                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.1
-                }}]
-            }},
-            options: {{ responsive: true, plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ min: 70, max: 100 }} }} }}
-        }});
-    </script>
-</body>
-</html>
-"""
+        # Mengunci khusus pembacaan Sheet Ke-4 (Index 3: PKT TIPE MESIN)
+        sheet_4_name = "PKT TIPE MESIN"
+        if sheet_4_name not in xls.sheet_names:
+            if len(xls.sheet_names) >= 4:
+                sheet_4_name = xls.sheet_names[3]
 
-st.components.v1.html(html_code, height=950, scrolling=True)
+        df_pkt_raw = pd.read_excel(xls, sheet_name=sheet_4_name, header=None)
+
+        def build_pkt_tipe_mesin_html(df):
+            html = """
+            <style>
+                .excel-container {
+                    max-height: 750px;
+                    overflow-y: auto;
+                    overflow-x: auto;
+                    border: 1px solid #7f8c8d;
+                    border-radius: 2px;
+                    background-color: #ffffff;
+                }
+                .excel-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 11px;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .excel-table td, .excel-table th {
+                    border: 1px solid #a6a6a6;
+                    padding: 4px 6px;
+                    white-space: nowrap;
+                }
+                
+                .col-no { width: 32px !important; text-align: center; }
+                .col-pkt { width: 180px !important; text-align: left; padding-left: 6px !important; }
+                
+                .header-excel {
+                    background-color: #8ea9db !important;
+                    color: #000000 !important;
+                    font-weight: bold;
+                    text-align: center;
+                    position: sticky;
+                    top: 0;
+                    z-index: 2;
+                }
+
+                .title-green-excel {
+                    background-color: #c6efce !important;
+                    color: #000000 !important;
+                    font-weight: bold;
+                    text-align: center;
+                    font-size: 12px;
+                }
+
+                .row-total {
+                    background-color: #d9e1f2 !important;
+                    font-weight: bold;
+                }
+
+                .text-pkt-red { color: #c00000 !important; font-weight: bold !important; }
+                .text-pkt-black { color: #000000 !important; font-weight: normal !important; }
+                
+                .text-red { color: #c00000 !important; font-weight: bold; }
+                .text-green { color: #008000 !important; font-weight: bold; }
+                .bg-pink-red { background-color: #ffc7ce !important; color: #9c0006 !important; font-weight: bold; text-align: center; }
+                .bg-light-green { background-color: #c6efce !important; color: #006100 !important; font-weight: bold; text-align: center; }
+                .center { text-align: center; }
+            </style>
+            <div class="excel-container">
+            <table class="excel-table">
+                <tbody>
+            """
+
+            for _, row in df.iterrows():
+                row_vals = [
+                    "" if pd.isnull(x) else str(x).strip()
+                    for x in row.values
+                ]
+
+                if not any(row_vals):
+                    continue
+
+                row_str = " ".join([v.upper() for v in row_vals])
+
+                # 1. Judul Header Hijau (ALL TIPE MESIN, CRML, CRMS)
+                if "UPTIME" in row_str:
+                    title_text = [v for v in row_vals if v != ""][0]
+                    html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
+                    continue
+
+                # 2. Header Kolom Tabel (NO, PKT / CSE, TOTAL CRM, Freq DT, Dur DT, dll)
+                if "NO" in row_vals and ("PKT" in row_vals or "CSE" in row_vals):
+                    html += '<tr class="header-excel">'
+                    for col_idx, v in enumerate(row_vals[:9]):
+                        cls = "col-no" if col_idx == 0 else ("col-pkt" if col_idx == 1 else "center")
+                        html += f'<td class="{cls}">{v}</td>'
+                    html += "</tr>"
+                    continue
+
+                achieve_ut_val = None
+                try:
+                    if len(row_vals) > 7 and row_vals[7] not in ["", "#DIV/0!", "nan", "None"]:
+                        achieve_ut_val = float(row_vals[7])
+                except:
+                    pass
+
+                is_pkt_red = (achieve_ut_val is not None) and (achieve_ut_val < 99.20)
+
+                is_total = "TOTAL" in row_str
+                tr_class = ' class="row-total"' if is_total else ""
+                html += f"<tr{tr_class}>"
+
+                for col_idx, val in enumerate(row_vals[:9]):
+                    if val == "" or val in ["#DIV/0!", "nan", "None"]:
+                        html += "<td></td>"
+                        continue
+
+                    cell_cls = []
+                    if col_idx == 0:
+                        cell_cls.append("col-no")
+                    elif col_idx == 1:
+                        cell_cls.append("col-pkt")
+                        if not is_total:
+                            if is_pkt_red:
+                                cell_cls.append("text-pkt-red")
+                            else:
+                                cell_cls.append("text-pkt-black")
+                    else:
+                        cell_cls.append("center")
+
+                    display_val = val
+                    try:
+                        num_val = float(val)
+                        if col_idx == 7:
+                            display_val = f"{num_val:.2f}"
+                            cell_cls.append(
+                                "bg-light-green"
+                                if num_val >= 99.20
+                                else "bg-pink-red"
+                            )
+                        elif col_idx == 8:
+                            display_val = f"{num_val:.2f}"
+                            cell_cls.append(
+                                "text-red"
+                                if num_val > 0.80
+                                else "text-green"
+                            )
+                        elif num_val.is_integer():
+                            display_val = str(int(num_val))
+                        else:
+                            display_val = f"{num_val:.2f}"
+                    except:
+                        pass
+
+                    cls_str = (
+                        f' class="{" ".join(cell_cls)}"'
+                        if cell_cls
+                        else ""
+                    )
+                    html += f"<td{cls_str}>{display_val}</td>"
+
+                html += "</tr>"
+
+            html += "</tbody></table></div>"
+            return html
+
+        table_html = build_pkt_tipe_mesin_html(df_pkt_raw)
+        st.components.v1.html(table_html, height=750, scrolling=True)
+
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat memproses sheet PKT TIPE MESIN: {e}")
