@@ -212,7 +212,7 @@ menu_option = st.sidebar.radio(
         "Uptime CSE by Tipe Mesin",
         "Uptime PKT by Tipe Mesin",
     ],
-    index=1,  # Default ke Uptime Harian
+    index=0,  # Default ke Uptime Harian
 )
 
 st.sidebar.divider()
