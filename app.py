@@ -24,7 +24,7 @@ if "logged_in" not in st.session_state:
     st.session_state["role"] = None
     st.session_state["user_name"] = ""
 
-# Session state untuk navigasi otomatis via klik link WSID
+# Session state untuk navigasi halaman
 if "nav_menu" not in st.session_state:
     st.session_state["nav_menu"] = "Uptime FRX DT (WSID)"
 
@@ -179,7 +179,7 @@ def load_data(file_path):
     if "atm total" in xls.sheet_names:
         try:
             df_atm_summary = pd.read_excel(xls, "atm total", skiprows=5)
-        except:
+        except Exception:
             pass
 
     daily_sheets = {}
@@ -191,7 +191,7 @@ def load_data(file_path):
             df_day = pd.read_excel(xls, sname, header=5)
             if "WSID" in df_day.columns:
                 daily_sheets[int(sname)] = df_day
-        except:
+        except Exception:
             pass
 
     return (
@@ -216,15 +216,14 @@ menu_options_list = [
     "Riwayat Kunjungan (Visit)",
 ]
 
-current_index = 0
+default_index = 0
 if st.session_state["nav_menu"] in menu_options_list:
-    current_index = menu_options_list.index(st.session_state["nav_menu"])
+    default_index = menu_options_list.index(st.session_state["nav_menu"])
 
 menu_option = st.sidebar.radio(
     "Pilih Tampilan Dashboard:",
     options=menu_options_list,
-    index=current_index,
-    key="radio_menu",
+    index=default_index,
 )
 st.session_state["nav_menu"] = menu_option
 
@@ -312,7 +311,6 @@ if st.sidebar.button("Logout"):
 # =============================================================
 if menu_option == "Uptime FRX DT (WSID)":
 
-    # Tombol rapi sejajar di sebelah kiri
     col_btn, col_space = st.columns([1, 2])
     with col_btn:
         if st.button(
@@ -406,7 +404,7 @@ if menu_option == "Uptime FRX DT (WSID)":
                     achieve_ut_float = float(row_atm["UPTIME"])
                     if achieve_ut_float <= 1.0:
                         achieve_ut_float = achieve_ut_float * 100
-                except:
+                except Exception:
                     pass
 
     achieve_ut_str = f"{round(achieve_ut_float, 2)}%"
@@ -863,7 +861,7 @@ elif menu_option == "Uptime Harian":
                         f_v = float(col_head_str)
                         if 1 <= f_v <= 31:
                             is_day_col = True
-                    except:
+                    except Exception:
                         pass
 
                     if is_day_col:
@@ -877,7 +875,7 @@ elif menu_option == "Uptime Harian":
                                         if float(s_val) > 0:
                                             has_real_data = True
                                             break
-                                    except:
+                                    except Exception:
                                         has_real_data = True
                                         break
 
@@ -935,7 +933,7 @@ elif menu_option == "Uptime Harian":
                                 num_v = float(v)
                                 if num_v.is_integer():
                                     v = str(int(num_v))
-                            except:
+                            except Exception:
                                 pass
 
                             cls = (
@@ -990,7 +988,7 @@ elif menu_option == "Uptime Harian":
                                 display_val = str(int(num_val))
                             else:
                                 display_val = f"{num_val:.2f}"
-                        except:
+                        except Exception:
                             pass
 
                         cls_str = (
@@ -1150,7 +1148,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                             "None",
                         ]:
                             achieve_ut_val = float(row_vals[7])
-                    except:
+                    except Exception:
                         pass
 
                     is_cse_red = (achieve_ut_val is not None) and (
@@ -1200,7 +1198,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                                 display_val = str(int(num_val))
                             else:
                                 display_val = f"{num_val:.2f}"
-                        except:
+                        except Exception:
                             pass
 
                         cls_str = (
@@ -1341,7 +1339,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                         "None",
                     ]:
                         achieve_ut_val = float(row_vals[7])
-                except:
+                except Exception:
                     pass
 
                 is_pkt_red = (achieve_ut_val is not None) and (
@@ -1391,7 +1389,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                             display_val = str(int(num_val))
                         else:
                             display_val = f"{num_val:.2f}"
-                    except:
+                    except Exception:
                         pass
 
                     cls_str = (
@@ -1416,55 +1414,131 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
 # =============================================================
 elif menu_option == "Riwayat Kunjungan (Visit)":
     st.markdown(
-        f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📋 Riwayat Kunjungan & Part Replacement WSID: <span style='color: #3498db;'>{selected_wsid}</span> ({selected_month})</h4>",
+        f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📋 Riwayat Kunjungan WSID: <span style='color: #3498db;'>{selected_wsid}</span> ({selected_month})</h4>",
         unsafe_allow_html=True,
     )
 
     if df_visit.empty:
-        st.warning(
-            "Data kunjungan (sheet 'MainVisit') tidak ditemukan pada file Master!"
-        )
+        st.warning("Data kunjungan (sheet 'MainVisit') tidak ditemukan pada file Master!")
     else:
-        col_id_name = (
-            "ID"
-            if "ID" in df_visit.columns
-            else ("WSID" if "WSID" in df_visit.columns else None)
-        )
+        col_id_name = "ID" if "ID" in df_visit.columns else ("WSID" if "WSID" in df_visit.columns else None)
 
         if col_id_name:
             df_filtered_visit = df_visit[
-                df_visit[col_id_name].astype(str).str.upper()
-                == str(selected_wsid).upper()
+                df_visit[col_id_name].astype(str).str.upper() == str(selected_wsid).upper()
             ]
 
             if df_filtered_visit.empty:
-                st.info(
-                    f"Tidak ada histori kunjungan yang tercatat untuk WSID **{selected_wsid}**."
-                )
+                st.info(f"Tidak ada histori kunjungan yang tercatat untuk WSID **{selected_wsid}**.")
             else:
-                st.write(
-                    f"Total Kunjungan Ditemukan: **{len(df_filtered_visit)} record**"
-                )
+                visit_rows_html = []
+                for _, r in df_filtered_visit.iterrows():
+                    ticket = str(r.get("TICKET", "-")) if pd.notnull(r.get("TICKET")) else "-"
+                    svc_type = str(r.get("SVC_TYPE", "-")) if pd.notnull(r.get("SVC_TYPE")) else "-"
+                    started = str(r.get("STARTED", "-")) if pd.notnull(r.get("STARTED")) else "-"
+                    finished = str(r.get("FINISHED", "-")) if pd.notnull(r.get("FINISHED")) else "-"
+                    solution = str(r.get("SOLUTION", "-")) if pd.notnull(r.get("SOLUTION")) else "-"
 
-                cols_to_show = [
-                    c
-                    for c in [
-                        "STARTED",
-                        "FINISHED",
-                        "SPART",
-                        "ENGINEER",
-                        "ACTION",
-                        "PROBLEM",
-                    ]
-                    if c in df_filtered_visit.columns
-                ]
-                if not cols_to_show:
-                    cols_to_show = df_filtered_visit.columns.tolist()
+                    visit_rows_html.append(f"""
+                    <tr>
+                        <td style="font-weight:600; vertical-align: top;">{ticket}</td>
+                        <td style="font-weight:600; vertical-align: top;">{svc_type}</td>
+                        <td style="vertical-align: top;">{started}</td>
+                        <td style="vertical-align: top;">{finished}</td>
+                        <td style="text-align: left; line-height: 1.4; vertical-align: top;">{solution}</td>
+                    </tr>
+                    """)
 
-                st.dataframe(
-                    df_filtered_visit[cols_to_show],
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                body_html = "".join(visit_rows_html)
+
+                visit_table_html = f"""
+                <!DOCTYPE html>
+                <html lang="id">
+                <head>
+                    <style>
+                        * {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }}
+                        body {{ background-color: #f4f6f9; padding: 10px; }}
+                        
+                        .visit-card {{
+                            background: #ffffff;
+                            border-radius: 6px;
+                            overflow: hidden;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                            border: 1px solid #dcdfe6;
+                        }}
+                        
+                        .visit-header {{
+                            background-color: #3598db;
+                            color: #ffffff;
+                            padding: 10px 15px;
+                            font-weight: bold;
+                            font-size: 14px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }}
+
+                        .visit-table-container {{
+                            max-height: 700px;
+                            overflow-y: auto;
+                            overflow-x: auto;
+                        }}
+
+                        .visit-table {{
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 12px;
+                            color: #333333;
+                        }}
+
+                        .visit-table th {{
+                            background-color: #f8f9fa;
+                            color: #2c3e50;
+                            font-weight: bold;
+                            text-align: left;
+                            padding: 10px 12px;
+                            border-bottom: 2px solid #dee2e6;
+                            position: sticky;
+                            top: 0;
+                            z-index: 1;
+                        }}
+
+                        .visit-table td {{
+                            padding: 12px;
+                            border-bottom: 1px solid #eef2f5;
+                        }}
+
+                        .visit-table tr:hover {{
+                            background-color: #f1f5f9;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="visit-card">
+                        <div class="visit-header">
+                            <span>Riwayat Kunjungan</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="visit-table-container">
+                            <table class="visit-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 14%;">TICKET</th>
+                                        <th style="width: 10%;">SVC_TYPE</th>
+                                        <th style="width: 15%;">STARTED</th>
+                                        <th style="width: 15%;">FINISHED</th>
+                                        <th style="width: 46%;">SOLUTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {body_html}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                st.components.v1.html(visit_table_html, height=750, scrolling=True)
         else:
             st.dataframe(df_visit, use_container_width=True)
