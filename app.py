@@ -7,6 +7,34 @@ import streamlit as st
 # 1. Konfigurasi Halaman Streamlit
 st.set_page_config(page_title="Balinusra Monitoring", layout="wide")
 
+# CSS Kustom untuk background teks label Pilih Bulan & WSID
+st.markdown(
+    """
+    <style>
+        /* Background teks label Pilih Bulan (Light Turquoise) */
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih Bulan:")) label p {
+            background-color: #AFEEEE !important;
+            color: #004D40 !important;
+            padding: 2px 8px !important;
+            border-radius: 4px !important;
+            font-weight: bold !important;
+            display: inline-block !important;
+        }
+
+        /* Background teks label Pilih / Ketik WSID (Pink) */
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik WSID:")) label p {
+            background-color: #FFB6C1 !important;
+            color: #880E4F !important;
+            padding: 2px 8px !important;
+            border-radius: 4px !important;
+            font-weight: bold !important;
+            display: inline-block !important;
+        }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 # -------------------------------------------------------------
 # 2. DATABASE USER LOGIN
 # -------------------------------------------------------------
@@ -108,7 +136,6 @@ def show_login_page():
                 unsafe_allow_html=True,
             )
 
-            # Menyuntikkan JavaScript agar browser mengenali atribut autocomplete
             st.components.v1.html(
                 """
                 <script>
@@ -220,7 +247,7 @@ def load_data(file_path):
 
 
 # -------------------------------------------------------------
-# 5. SIDEBAR: FILTER DASHBOARD & NAVIGASI MENU
+# 5. SIDEBAR: NAVIGASI MENU & PANEL ADMIN
 # -------------------------------------------------------------
 st.sidebar.markdown(
     "<h3 style='font-size: 18px; font-weight: bold; margin-bottom: 10px; white-space: nowrap;'>🔍 Dasbord Monitoring</h3>",
@@ -249,55 +276,13 @@ st.session_state["nav_menu"] = menu_option
 st.sidebar.divider()
 
 month_options = [f"2026-{m:02d}" for m in range(1, 13)]
-selected_month = st.sidebar.selectbox(
-    "Pilih Bulan:",
-    options=month_options,
-    index=8,  # Default 2026-09
-)
-
-target_excel_file = f"MASTER_{selected_month}.xlsx"
-
-if not os.path.exists(target_excel_file):
-    if os.path.exists("MASTER.xlsx"):
-        target_excel_file = "MASTER.xlsx"
-    else:
-        st.error(
-            f"File '{target_excel_file}' atau 'MASTER.xlsx' tidak ditemukan di server!"
-        )
-        st.stop()
-
-(
-    df_frx_raw,
-    df_site,
-    df_visit,
-    df_atm_summary,
-    daily_sheets,
-) = load_data(target_excel_file)
-
-selected_wsid = "ZTR4"
-if menu_option in ["Uptime FRX DT (WSID)", "Riwayat Kunjungan (Visit)"]:
-    list_wsid = []
-    if not df_site.empty and "ID" in df_site.columns:
-        list_wsid = df_site["ID"].dropna().unique().tolist()
-    elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
-        list_wsid = df_atm_summary["WSID"].dropna().unique().tolist()
-
-    if "ZTR4" not in list_wsid and list_wsid:
-        list_wsid.insert(0, "ZTR4")
-
-    if list_wsid:
-        selected_wsid = st.sidebar.selectbox(
-            "Pilih / Ketik WSID:", options=list_wsid, index=0
-        )
-
-st.sidebar.divider()
 
 if st.session_state["role"] == "admin":
     st.sidebar.subheader("⚙️ Panel Admin (All Access)")
     admin_upload_month = st.sidebar.selectbox(
         "Upload Master Excel untuk Bulan:",
         options=month_options,
-        index=month_options.index(selected_month),
+        index=8,
     )
 
     uploaded_file = st.sidebar.file_uploader(
@@ -326,18 +311,73 @@ if st.sidebar.button("Logout"):
 
 
 # =============================================================
+# HEADER ATAS: PILIHAN BULAN, WSID, DAN TOMBOL NAVIGASI
+# =============================================================
+col_btn, col_month, col_wsid = st.columns([1.5, 1, 1.2])
+
+with col_month:
+    selected_month = st.selectbox(
+        "Pilih Bulan:",
+        options=month_options,
+        index=8,  # Default 2026-09
+        key="main_month_select",
+    )
+
+target_excel_file = f"MASTER_{selected_month}.xlsx"
+
+if not os.path.exists(target_excel_file):
+    if os.path.exists("MASTER.xlsx"):
+        target_excel_file = "MASTER.xlsx"
+    else:
+        st.error(
+            f"File '{target_excel_file}' atau 'MASTER.xlsx' tidak ditemukan di server!"
+        )
+        st.stop()
+
+(
+    df_frx_raw,
+    df_site,
+    df_visit,
+    df_atm_summary,
+    daily_sheets,
+) = load_data(target_excel_file)
+
+# Mengambil daftar WSID dari data master
+list_wsid = []
+if not df_site.empty and "ID" in df_site.columns:
+    list_wsid = df_site["ID"].dropna().unique().tolist()
+elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+    list_wsid = df_atm_summary["WSID"].dropna().unique().tolist()
+
+if "ZTR4" not in list_wsid and list_wsid:
+    list_wsid.insert(0, "ZTR4")
+
+selected_wsid = "ZTR4"
+with col_wsid:
+    if list_wsid:
+        selected_wsid = st.selectbox(
+            "Pilih / Ketik WSID:",
+            options=list_wsid,
+            index=0,
+            key="main_wsid_select",
+        )
+
+with col_btn:
+    st.write("")  # Menyejajarkan posisi tombol vertikal dengan selectbox
+    st.write("")
+    if st.button(
+        f"🔗 Buka Riwayat Kunjungan ({selected_wsid})",
+        type="primary",
+        use_container_width=True,
+    ):
+        st.session_state["nav_menu"] = "Riwayat Kunjungan (Visit)"
+        st.rerun()
+
+
+# =============================================================
 # HALAMAN 1: UPTIME FRX DT (PER WSID)
 # =============================================================
 if menu_option == "Uptime FRX DT (WSID)":
-
-    col_btn, col_space = st.columns([1, 2])
-    with col_btn:
-        if st.button(
-            f"🔗 Buka Riwayat Kunjungan ({selected_wsid})",
-            type="primary",
-        ):
-            st.session_state["nav_menu"] = "Riwayat Kunjungan (Visit)"
-            st.rerun()
 
     info_data = {
         "Wsid": selected_wsid,
