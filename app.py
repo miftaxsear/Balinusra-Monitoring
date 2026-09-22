@@ -36,7 +36,7 @@ st.markdown(
 )
 
 # -------------------------------------------------------------
-# 2. DATABASE USER LOGIN
+# 2. DATABASE USER LOGIN & SESSION STATE
 # -------------------------------------------------------------
 USERS = {
     "admin": {
@@ -52,7 +52,7 @@ if "logged_in" not in st.session_state:
     st.session_state["role"] = None
     st.session_state["user_name"] = ""
 
-# Session state untuk navigasi halaman
+# Inisialisasi session state untuk navigasi jika belum ada
 if "nav_menu" not in st.session_state:
     st.session_state["nav_menu"] = "Uptime FRX DT (WSID)"
 
@@ -262,16 +262,12 @@ menu_options_list = [
     "Riwayat Kunjungan (Visit)",
 ]
 
-default_index = 0
-if st.session_state["nav_menu"] in menu_options_list:
-    default_index = menu_options_list.index(st.session_state["nav_menu"])
-
+# Menggunakan key="nav_menu" langsung untuk sinkronisasi otomatis tanpa bug 2x klik
 menu_option = st.sidebar.radio(
     "Pilih Tampilan Dashboard:",
     options=menu_options_list,
-    index=default_index,
+    key="nav_menu",
 )
-st.session_state["nav_menu"] = menu_option
 
 st.sidebar.divider()
 
