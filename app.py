@@ -24,6 +24,10 @@ if "logged_in" not in st.session_state:
     st.session_state["role"] = None
     st.session_state["user_name"] = ""
 
+# Session state untuk navigasi otomatis via klik link WSID
+if "nav_menu" not in st.session_state:
+    st.session_state["nav_menu"] = "Uptime FRX DT (WSID)"
+
 
 # -------------------------------------------------------------
 # 3. HALAMAN LOGIN STYLE MYDATINDO
@@ -204,16 +208,25 @@ def load_data(file_path):
 # -------------------------------------------------------------
 st.sidebar.header("🔍 Filter Dashboard")
 
+menu_options_list = [
+    "Uptime FRX DT (WSID)",
+    "Uptime Harian",
+    "Uptime CSE by Tipe Mesin",
+    "Uptime PKT by Tipe Mesin",
+    "Riwayat Kunjungan (Visit)",
+]
+
+current_index = 0
+if st.session_state["nav_menu"] in menu_options_list:
+    current_index = menu_options_list.index(st.session_state["nav_menu"])
+
 menu_option = st.sidebar.radio(
     "Pilih Tampilan Dashboard:",
-    options=[
-        "Uptime FRX DT (WSID)",
-        "Uptime Harian",
-        "Uptime CSE by Tipe Mesin",
-        "Uptime PKT by Tipe Mesin",
-    ],
-    index=0,  # Default ke Uptime Harian
+    options=menu_options_list,
+    index=current_index,
+    key="radio_menu",
 )
+st.session_state["nav_menu"] = menu_option
 
 st.sidebar.divider()
 
@@ -244,7 +257,7 @@ if not os.path.exists(target_excel_file):
 ) = load_data(target_excel_file)
 
 selected_wsid = "ZTR4"
-if menu_option == "Uptime FRX DT (WSID)":
+if menu_option in ["Uptime FRX DT (WSID)", "Riwayat Kunjungan (Visit)"]:
     list_wsid = []
     if not df_site.empty and "ID" in df_site.columns:
         list_wsid = df_site["ID"].dropna().unique().tolist()
@@ -298,6 +311,16 @@ if st.sidebar.button("Logout"):
 # HALAMAN 1: UPTIME FRX DT (PER WSID)
 # =============================================================
 if menu_option == "Uptime FRX DT (WSID)":
+
+    # Tombol rapi sejajar di sebelah kiri
+    col_btn, col_space = st.columns([1, 2])
+    with col_btn:
+        if st.button(
+            f"🔗 Buka Riwayat Kunjungan ({selected_wsid})",
+            type="primary",
+        ):
+            st.session_state["nav_menu"] = "Riwayat Kunjungan (Visit)"
+            st.rerun()
 
     info_data = {
         "Wsid": selected_wsid,
@@ -413,37 +436,98 @@ if menu_option == "Uptime FRX DT (WSID)":
             tgl_str = f"{d:02d}/{month_str}/{year_str}"
             chart_tgl = f"{d:02d}-{month_str}"
 
-            # Cek apakah tanggal ini sudah ada data terisi di sheet
             has_valid_day_data = False
             if not row_match.empty:
                 r = row_match.iloc[0]
                 for col_k in ["FRX", "DUR", "%", "FRX.1", "DUR.1", "%.1"]:
                     val_check = r.get(col_k)
-                    if pd.notnull(val_check) and str(val_check).strip() not in ["", "nan", "None"]:
+                    if pd.notnull(val_check) and str(
+                        val_check
+                    ).strip() not in ["", "nan", "None"]:
                         has_valid_day_data = True
                         break
 
             if has_valid_day_data and not row_match.empty:
                 r = row_match.iloc[0]
-                hw_freq = int(float(r.get("FRX", 0))) if pd.notnull(r.get("FRX")) else 0
-                hw_dur = int(float(r.get("DUR", 0))) if pd.notnull(r.get("DUR")) else 0
-                hw_dt = round(float(r.get("%", 0)), 2) if pd.notnull(r.get("%")) else 0.0
+                hw_freq = (
+                    int(float(r.get("FRX", 0)))
+                    if pd.notnull(r.get("FRX"))
+                    else 0
+                )
+                hw_dur = (
+                    int(float(r.get("DUR", 0)))
+                    if pd.notnull(r.get("DUR"))
+                    else 0
+                )
+                hw_dt = (
+                    round(float(r.get("%", 0)), 2)
+                    if pd.notnull(r.get("%"))
+                    else 0.0
+                )
 
-                p01_freq = int(float(r.get("FRX.1", 0))) if pd.notnull(r.get("FRX.1")) else 0
-                p01_dur = int(float(r.get("DUR.1", 0))) if pd.notnull(r.get("DUR.1")) else 0
-                p01_dt = round(float(r.get("%.1", 0)), 2) if pd.notnull(r.get("%.1")) else 0.0
+                p01_freq = (
+                    int(float(r.get("FRX.1", 0)))
+                    if pd.notnull(r.get("FRX.1"))
+                    else 0
+                )
+                p01_dur = (
+                    int(float(r.get("DUR.1", 0)))
+                    if pd.notnull(r.get("DUR.1"))
+                    else 0
+                )
+                p01_dt = (
+                    round(float(r.get("%.1", 0)), 2)
+                    if pd.notnull(r.get("%.1"))
+                    else 0.0
+                )
 
-                p02_freq = int(float(r.get("FRX.2", 0))) if pd.notnull(r.get("FRX.2")) else 0
-                p02_dur = int(float(r.get("DUR.2", 0))) if pd.notnull(r.get("DUR.2")) else 0
-                p02_dt = round(float(r.get("%.2", 0)), 2) if pd.notnull(r.get("%.2")) else 0.0
+                p02_freq = (
+                    int(float(r.get("FRX.2", 0)))
+                    if pd.notnull(r.get("FRX.2"))
+                    else 0
+                )
+                p02_dur = (
+                    int(float(r.get("DUR.2", 0)))
+                    if pd.notnull(r.get("DUR.2"))
+                    else 0
+                )
+                p02_dt = (
+                    round(float(r.get("%.2", 0)), 2)
+                    if pd.notnull(r.get("%.2"))
+                    else 0.0
+                )
 
-                p03_freq = int(float(r.get("FRX.3", 0))) if pd.notnull(r.get("FRX.3")) else 0
-                p03_dur = int(float(r.get("DUR.3", 0))) if pd.notnull(r.get("DUR.3")) else 0
-                p03_dt = round(float(r.get("%.3", 0)), 2) if pd.notnull(r.get("%.3")) else 0.0
+                p03_freq = (
+                    int(float(r.get("FRX.3", 0)))
+                    if pd.notnull(r.get("FRX.3"))
+                    else 0
+                )
+                p03_dur = (
+                    int(float(r.get("DUR.3", 0)))
+                    if pd.notnull(r.get("DUR.3"))
+                    else 0
+                )
+                p03_dt = (
+                    round(float(r.get("%.3", 0)), 2)
+                    if pd.notnull(r.get("%.3"))
+                    else 0.0
+                )
 
-                p04_freq = int(float(r.get("FRX.4", 0))) if pd.notnull(r.get("FRX.4")) else 0
-                p04_dur = int(float(r.get("DUR.4", 0))) if pd.notnull(r.get("DUR.4")) else 0
-                p04_dt = round(float(r.get("%.4", 0)), 2) if pd.notnull(r.get("%.4")) else 0.0
+                p04_freq = (
+                    int(float(r.get("FRX.4", 0)))
+                    if pd.notnull(r.get("FRX.4"))
+                    else 0
+                )
+                p04_dur = (
+                    int(float(r.get("DUR.4", 0)))
+                    if pd.notnull(r.get("DUR.4"))
+                    else 0
+                )
+                p04_dt = (
+                    round(float(r.get("%.4", 0)), 2)
+                    if pd.notnull(r.get("%.4"))
+                    else 0.0
+                )
 
                 uptime_val = round(100 - hw_dt, 2) if hw_dt <= 100 else 0.0
                 chart_dates.append(chart_tgl)
@@ -463,7 +547,6 @@ if menu_option == "Uptime FRX DT (WSID)":
                 </tr>
                 """
             else:
-                # JIKA DATA BELUM TERISI: BACKGROUND PUTIH (#ffffff) & SEL DIKOSONGKAN
                 row_html = f"""
                 <tr style="background-color: #ffffff; color: #000000;">
                     <td style="font-weight:bold; text-align:center;">{tgl_str}</td>
@@ -474,7 +557,7 @@ if menu_option == "Uptime FRX DT (WSID)":
                     <td></td><td></td><td></td>
                 </tr>
                 """
-            
+
             table_frx_rows_html.append(row_html)
 
     table_frx_body = "".join(table_frx_rows_html)
@@ -553,7 +636,6 @@ if menu_option == "Uptime FRX DT (WSID)":
                 padding: 4px 2px;
             }}
             
-            /* DIBUAT DENGAN TAMPILAN NORMAL DAN SESUAI DI ATAS HEADER TABEL */
             .p02-header-bg {{ background-color: #f39c12 !important; color: #000000 !important; font-size: 11px; font-weight: bold; }}
             .p02-sub-header {{ background-color: #fdf3e7 !important; color: #000000 !important; font-weight: bold; }}
             .table-scroll {{ max-height: 290px; overflow-y: auto; overflow-x: auto; position: relative; }}
@@ -647,7 +729,6 @@ elif menu_option == "Uptime Harian":
     try:
         xls = pd.ExcelFile(target_excel_file)
 
-        # Membaca Sheet Ke-2 dari file Excel (Index 1: UPTIME HARIAN)
         sheet_2_name = (
             xls.sheet_names[1]
             if len(xls.sheet_names) > 1
@@ -732,7 +813,6 @@ elif menu_option == "Uptime Harian":
             valid_col_indices = []
             header_row_idx = None
 
-            # 1. Identifikasi Baris Header Utama (NO, CSE, CRM, & 3 Bulan Terakhir)
             for r_idx, r in df.iterrows():
                 r_vals = [
                     "" if pd.isnull(x) else str(x).strip().upper()
@@ -741,14 +821,13 @@ elif menu_option == "Uptime Harian":
                 if "NO" in r_vals and "CSE" in r_vals:
                     header_row_idx = r_idx
                     for col_i, col_v in enumerate(r_vals):
-                        if col_i in [0, 1, 2]:  # Kolom NO, CSE, CRM
+                        if col_i in [0, 1, 2]:
                             valid_col_indices.append(col_i)
                         elif col_v in ALL_MONTHS:
                             if col_v in keep_months:
                                 valid_col_indices.append(col_i)
                     break
 
-            # 2. PENGECEKAN KETAT KOLOM TANGGAL HARIAN (1 S/D 31):
             if header_row_idx is not None:
                 header_vals = [
                     "" if pd.isnull(x) else str(x).strip().upper()
@@ -758,8 +837,18 @@ elif menu_option == "Uptime Harian":
                 cse_start_row = header_row_idx + 1
                 cse_end_row = len(df)
                 for r_i in range(cse_start_row, len(df)):
-                    r_txt = " ".join([str(x).upper() for x in df.iloc[r_i].values if pd.notnull(x)])
-                    if "TOTAL" in r_txt or "PENGELOLA" in r_txt or "BALI NUSRA" in r_txt:
+                    r_txt = " ".join(
+                        [
+                            str(x).upper()
+                            for x in df.iloc[r_i].values
+                            if pd.notnull(x)
+                        ]
+                    )
+                    if (
+                        "TOTAL" in r_txt
+                        or "PENGELOLA" in r_txt
+                        or "BALI NUSRA" in r_txt
+                    ):
                         cse_end_row = r_i
                         break
 
@@ -795,13 +884,14 @@ elif menu_option == "Uptime Harian":
                         if has_real_data:
                             valid_col_indices.append(col_i)
 
-            # MEMISAHKAN BARIS ENGINEER DAN PENGELOLA
             rows_engineer = []
             rows_pengelola = []
             current_section = "ENGINEER"
 
             for row_idx, row in df.iterrows():
-                row_vals = ["" if pd.isnull(x) else str(x).strip() for x in row.values]
+                row_vals = [
+                    "" if pd.isnull(x) else str(x).strip() for x in row.values
+                ]
                 if not any(row_vals):
                     continue
                 row_str = " ".join([v.upper() for v in row_vals])
@@ -834,7 +924,11 @@ elif menu_option == "Uptime Harian":
                     if "NO" in row_vals and "CSE" in row_vals:
                         sec_html += '<tr class="header-row">'
                         for col_idx in valid_col_indices:
-                            v = row_vals[col_idx] if col_idx < len(row_vals) else ""
+                            v = (
+                                row_vals[col_idx]
+                                if col_idx < len(row_vals)
+                                else ""
+                            )
                             if v in ["#DIV/0!", "nan", "None"]:
                                 v = ""
                             try:
@@ -844,7 +938,11 @@ elif menu_option == "Uptime Harian":
                             except:
                                 pass
 
-                            cls = "col-no" if col_idx == 0 else ("col-cse" if col_idx == 1 else "")
+                            cls = (
+                                "col-no"
+                                if col_idx == 0
+                                else ("col-cse" if col_idx == 1 else "")
+                            )
                             sec_html += f'<td class="{cls}">{v}</td>'
                         sec_html += "</tr>"
                         continue
@@ -852,11 +950,19 @@ elif menu_option == "Uptime Harian":
                     is_total = "TOTAL" in row_str
                     is_id_tidak_tercapai = "ID TIDAK TERCAPAI" in row_str
 
-                    tr_class = ' class="row-summary"' if (is_total or is_id_tidak_tercapai) else ""
+                    tr_class = (
+                        ' class="row-summary"'
+                        if (is_total or is_id_tidak_tercapai)
+                        else ""
+                    )
                     sec_html += f"<tr{tr_class}>"
 
                     for col_idx in valid_col_indices:
-                        val = row_vals[col_idx] if col_idx < len(row_vals) else ""
+                        val = (
+                            row_vals[col_idx]
+                            if col_idx < len(row_vals)
+                            else ""
+                        )
 
                         if val == "" or val in ["#DIV/0!", "nan", "None"]:
                             sec_html += "<td></td>"
@@ -887,7 +993,11 @@ elif menu_option == "Uptime Harian":
                         except:
                             pass
 
-                        cls_str = f' class="{" ".join(cell_cls)}"' if cell_cls else ""
+                        cls_str = (
+                            f' class="{" ".join(cell_cls)}"'
+                            if cell_cls
+                            else ""
+                        )
                         sec_html += f"<td{cls_str}>{display_val}</td>"
 
                     sec_html += "</tr>"
@@ -895,19 +1005,15 @@ elif menu_option == "Uptime Harian":
                 sec_html += "</tbody></table></div>"
                 return sec_html
 
-            # TABEL 1: ENGINEER (Slider Horizontal Terpisah)
             html += render_section_table("ENGINEER", rows_engineer)
 
-            # TABEL 2: PENGELOLA (Slider Horizontal Terpisah)
             if rows_pengelola:
                 html += render_section_table("PENGELOLA", rows_pengelola)
 
             html += "</div>"
             return html
 
-        table_html = build_uptime_daily_crm_bca_html(
-            df_sheet2, allowed_months
-        )
+        table_html = build_uptime_daily_crm_bca_html(df_sheet2, allowed_months)
         st.components.v1.html(table_html, height=780, scrolling=True)
 
     except Exception as e:
@@ -1019,22 +1125,37 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                         html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
                         continue
 
-                    if "NO" in row_vals and ("CSE" in row_vals or "PROVINSI" in row_vals):
+                    if "NO" in row_vals and (
+                        "CSE" in row_vals or "PROVINSI" in row_vals
+                    ):
                         html += '<tr class="header-excel">'
                         for col_idx, v in enumerate(row_vals[:9]):
-                            cls = "col-no" if col_idx == 0 else ("col-cse" if col_idx == 1 else "center")
+                            cls = (
+                                "col-no"
+                                if col_idx == 0
+                                else (
+                                    "col-cse" if col_idx == 1 else "center"
+                                )
+                            )
                             html += f'<td class="{cls}">{v}</td>'
                         html += "</tr>"
                         continue
 
                     achieve_ut_val = None
                     try:
-                        if len(row_vals) > 7 and row_vals[7] not in ["", "#DIV/0!", "nan", "None"]:
+                        if len(row_vals) > 7 and row_vals[7] not in [
+                            "",
+                            "#DIV/0!",
+                            "nan",
+                            "None",
+                        ]:
                             achieve_ut_val = float(row_vals[7])
                     except:
                         pass
 
-                    is_cse_red = (achieve_ut_val is not None) and (achieve_ut_val < 99.20)
+                    is_cse_red = (achieve_ut_val is not None) and (
+                        achieve_ut_val < 99.20
+                    )
 
                     is_total = "TOTAL" in row_str
                     tr_class = ' class="row-total"' if is_total else ""
@@ -1103,7 +1224,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
 
 
 # =============================================================
-# HALAMAN 4: UPTIME PKT BY TIPE MESIN (KHUSUS SHEET KE-4: PKT TIPE MESIN)
+# HALAMAN 4: UPTIME PKT BY TIPE MESIN
 # =============================================================
 elif menu_option == "Uptime PKT by Tipe Mesin":
     st.markdown(
@@ -1113,8 +1234,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
 
     try:
         xls = pd.ExcelFile(target_excel_file)
-        
-        # Mengunci khusus pembacaan Sheet Ke-4 (Index 3: PKT TIPE MESIN)
+
         sheet_4_name = "PKT TIPE MESIN"
         if sheet_4_name not in xls.sheet_names:
             if len(xls.sheet_names) >= 4:
@@ -1187,8 +1307,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
 
             for _, row in df.iterrows():
                 row_vals = [
-                    "" if pd.isnull(x) else str(x).strip()
-                    for x in row.values
+                    "" if pd.isnull(x) else str(x).strip() for x in row.values
                 ]
 
                 if not any(row_vals):
@@ -1196,29 +1315,38 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
 
                 row_str = " ".join([v.upper() for v in row_vals])
 
-                # 1. Judul Header Hijau (ALL TIPE MESIN, CRML, CRMS)
                 if "UPTIME" in row_str:
                     title_text = [v for v in row_vals if v != ""][0]
                     html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
                     continue
 
-                # 2. Header Kolom Tabel (NO, PKT / CSE, TOTAL CRM, Freq DT, Dur DT, dll)
                 if "NO" in row_vals and ("PKT" in row_vals or "CSE" in row_vals):
                     html += '<tr class="header-excel">'
                     for col_idx, v in enumerate(row_vals[:9]):
-                        cls = "col-no" if col_idx == 0 else ("col-pkt" if col_idx == 1 else "center")
+                        cls = (
+                            "col-no"
+                            if col_idx == 0
+                            else ("col-pkt" if col_idx == 1 else "center")
+                        )
                         html += f'<td class="{cls}">{v}</td>'
                     html += "</tr>"
                     continue
 
                 achieve_ut_val = None
                 try:
-                    if len(row_vals) > 7 and row_vals[7] not in ["", "#DIV/0!", "nan", "None"]:
+                    if len(row_vals) > 7 and row_vals[7] not in [
+                        "",
+                        "#DIV/0!",
+                        "nan",
+                        "None",
+                    ]:
                         achieve_ut_val = float(row_vals[7])
                 except:
                     pass
 
-                is_pkt_red = (achieve_ut_val is not None) and (achieve_ut_val < 99.20)
+                is_pkt_red = (achieve_ut_val is not None) and (
+                    achieve_ut_val < 99.20
+                )
 
                 is_total = "TOTAL" in row_str
                 tr_class = ' class="row-total"' if is_total else ""
@@ -1267,9 +1395,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                         pass
 
                     cls_str = (
-                        f' class="{" ".join(cell_cls)}"'
-                        if cell_cls
-                        else ""
+                        f' class="{" ".join(cell_cls)}"' if cell_cls else ""
                     )
                     html += f"<td{cls_str}>{display_val}</td>"
 
@@ -1283,3 +1409,62 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
 
     except Exception as e:
         st.error(f"Terjadi kesalahan saat memproses sheet PKT TIPE MESIN: {e}")
+
+
+# =============================================================
+# HALAMAN 5: RIWAYAT KUNJUNGAN (VISIT HISTORY)
+# =============================================================
+elif menu_option == "Riwayat Kunjungan (Visit)":
+    st.markdown(
+        f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📋 Riwayat Kunjungan & Part Replacement WSID: <span style='color: #3498db;'>{selected_wsid}</span> ({selected_month})</h4>",
+        unsafe_allow_html=True,
+    )
+
+    if df_visit.empty:
+        st.warning(
+            "Data kunjungan (sheet 'MainVisit') tidak ditemukan pada file Master!"
+        )
+    else:
+        col_id_name = (
+            "ID"
+            if "ID" in df_visit.columns
+            else ("WSID" if "WSID" in df_visit.columns else None)
+        )
+
+        if col_id_name:
+            df_filtered_visit = df_visit[
+                df_visit[col_id_name].astype(str).str.upper()
+                == str(selected_wsid).upper()
+            ]
+
+            if df_filtered_visit.empty:
+                st.info(
+                    f"Tidak ada histori kunjungan yang tercatat untuk WSID **{selected_wsid}**."
+                )
+            else:
+                st.write(
+                    f"Total Kunjungan Ditemukan: **{len(df_filtered_visit)} record**"
+                )
+
+                cols_to_show = [
+                    c
+                    for c in [
+                        "STARTED",
+                        "FINISHED",
+                        "SPART",
+                        "ENGINEER",
+                        "ACTION",
+                        "PROBLEM",
+                    ]
+                    if c in df_filtered_visit.columns
+                ]
+                if not cols_to_show:
+                    cols_to_show = df_filtered_visit.columns.tolist()
+
+                st.dataframe(
+                    df_filtered_visit[cols_to_show],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        else:
+            st.dataframe(df_visit, use_container_width=True)
