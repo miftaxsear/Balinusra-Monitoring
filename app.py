@@ -246,69 +246,12 @@ def load_data(file_path):
     )
 
 
-# -------------------------------------------------------------
-# 5. SIDEBAR: NAVIGASI MENU & PANEL ADMIN
-# -------------------------------------------------------------
-st.sidebar.markdown(
-    "<h3 style='font-size: 18px; font-weight: bold; margin-bottom: 10px; white-space: nowrap;'>🔍 Dasbord Monitoring</h3>",
-    unsafe_allow_html=True,
-)
-
-menu_options_list = [
-    "Uptime FRX DT (WSID)",
-    "Uptime Harian",
-    "Uptime CSE by Tipe Mesin",
-    "Uptime PKT by Tipe Mesin",
-    "Riwayat Kunjungan (Visit)",
-]
-
-# Menggunakan key="nav_menu" langsung untuk sinkronisasi otomatis tanpa bug 2x klik
-menu_option = st.sidebar.radio(
-    "Pilih Tampilan Dashboard:",
-    options=menu_options_list,
-    key="nav_menu",
-)
-
-st.sidebar.divider()
-
+# =============================================================
+# HEADER ATAS: PILIHAN BULAN & WSID (DIPINDAHKAN KE ATAS SIDEBAR)
+# =============================================================
 month_options = [f"2026-{m:02d}" for m in range(1, 13)]
 
-if st.session_state["role"] == "admin":
-    st.sidebar.subheader("⚙️ Panel Admin (All Access)")
-    admin_upload_month = st.sidebar.selectbox(
-        "Upload Master Excel untuk Bulan:",
-        options=month_options,
-        index=8,
-    )
-
-    uploaded_file = st.sidebar.file_uploader(
-        f"Upload File Master ({admin_upload_month}):", type=["xlsx"]
-    )
-
-    if uploaded_file is not None:
-        save_file_name = f"MASTER_{admin_upload_month}.xlsx"
-        with open(save_file_name, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.cache_data.clear()
-        st.sidebar.success(f"File {save_file_name} berhasil diperbarui!")
-        st.rerun()
-else:
-    st.sidebar.info("👁️ **Mode Viewer**: Anda hanya memiliki akses melihat data.")
-
-st.sidebar.divider()
-
-st.sidebar.markdown(f"**Logged in as:** {st.session_state['user_name']}")
-st.sidebar.markdown(f"**Role:** `{st.session_state['role'].upper()}`")
-
-if st.sidebar.button("Logout"):
-    st.session_state["logged_in"] = False
-    st.session_state["role"] = None
-    st.rerun()
-
-
-# =============================================================
-# HEADER ATAS: PILIHAN BULAN, WSID, DAN TOMBOL NAVIGASI
-# =============================================================
+# Tangkap pilihan bulan & wsid di paling atas agar state-nya siap sebelum render widget lain
 col_btn, col_month, col_wsid = st.columns([1.5, 1, 1.2])
 
 with col_month:
@@ -361,13 +304,74 @@ with col_wsid:
 with col_btn:
     st.write("")  # Menyejajarkan posisi tombol vertikal dengan selectbox
     st.write("")
-    if st.button(
+
+    def go_to_visit():
+        st.session_state["nav_menu"] = "Riwayat Kunjungan (Visit)"
+
+    st.button(
         f"🔗 Buka Riwayat Kunjungan ({selected_wsid})",
         type="primary",
         use_container_width=True,
-    ):
-        st.session_state["nav_menu"] = "Riwayat Kunjungan (Visit)"
+        on_click=go_to_visit,
+    )
+
+
+# -------------------------------------------------------------
+# 5. SIDEBAR: NAVIGASI MENU & PANEL ADMIN
+# -------------------------------------------------------------
+st.sidebar.markdown(
+    "<h3 style='font-size: 18px; font-weight: bold; margin-bottom: 10px; white-space: nowrap;'>🔍 Dasbord Monitoring</h3>",
+    unsafe_allow_html=True,
+)
+
+menu_options_list = [
+    "Uptime FRX DT (WSID)",
+    "Uptime Harian",
+    "Uptime CSE by Tipe Mesin",
+    "Uptime PKT by Tipe Mesin",
+    "Riwayat Kunjungan (Visit)",
+]
+
+# Menggunakan key="nav_menu" langsung untuk sinkronisasi otomatis
+menu_option = st.sidebar.radio(
+    "Pilih Tampilan Dashboard:",
+    options=menu_options_list,
+    key="nav_menu",
+)
+
+st.sidebar.divider()
+
+if st.session_state["role"] == "admin":
+    st.sidebar.subheader("⚙️ Panel Admin (All Access)")
+    admin_upload_month = st.sidebar.selectbox(
+        "Upload Master Excel untuk Bulan:",
+        options=month_options,
+        index=8,
+    )
+
+    uploaded_file = st.sidebar.file_uploader(
+        f"Upload File Master ({admin_upload_month}):", type=["xlsx"]
+    )
+
+    if uploaded_file is not None:
+        save_file_name = f"MASTER_{admin_upload_month}.xlsx"
+        with open(save_file_name, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        st.cache_data.clear()
+        st.sidebar.success(f"File {save_file_name} berhasil diperbarui!")
         st.rerun()
+else:
+    st.sidebar.info("👁️ **Mode Viewer**: Anda hanya memiliki akses melihat data.")
+
+st.sidebar.divider()
+
+st.sidebar.markdown(f"**Logged in as:** {st.session_state['user_name']}")
+st.sidebar.markdown(f"**Role:** `{st.session_state['role'].upper()}`")
+
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.session_state["role"] = None
+    st.rerun()
 
 
 # =============================================================
