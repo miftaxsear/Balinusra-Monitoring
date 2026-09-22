@@ -108,6 +108,22 @@ def show_login_page():
                 unsafe_allow_html=True,
             )
 
+            # Menyuntikkan JavaScript agar browser mengenali atribut autocomplete
+            st.components.v1.html(
+                """
+                <script>
+                const inputs = window.parent.document.querySelectorAll('input');
+                if (inputs.length >= 2) {
+                    inputs[0].setAttribute('autocomplete', 'username');
+                    inputs[0].setAttribute('name', 'username');
+                    inputs[1].setAttribute('autocomplete', 'current-password');
+                    inputs[1].setAttribute('name', 'password');
+                }
+                </script>
+                """,
+                height=0,
+            )
+
             with st.form("login_form"):
                 username_input = st.text_input(
                     "Username",
@@ -206,7 +222,10 @@ def load_data(file_path):
 # -------------------------------------------------------------
 # 5. SIDEBAR: FILTER DASHBOARD & NAVIGASI MENU
 # -------------------------------------------------------------
-st.sidebar.header("🔍 Filter Dashboard")
+st.sidebar.markdown(
+    "<h3 style='font-size: 18px; font-weight: bold; margin-bottom: 10px; white-space: nowrap;'>🔍 Dasbord Monitoring</h3>",
+    unsafe_allow_html=True,
+)
 
 menu_options_list = [
     "Uptime FRX DT (WSID)",
