@@ -49,11 +49,11 @@ st.markdown(
 # -------------------------------------------------------------
 USERS = {
     "admin": {
-        "password": "admin123",
+        "password": "balinusra1",
         "role": "admin",
         "name": "Administrator",
     },
-    "user": {"password": "user123", "role": "viewer", "name": "User Biasa"},
+    "balinusra": {"password": "balinusra1", "role": "viewer", "name": "Engineer"},
 }
 
 if "logged_in" not in st.session_state:
@@ -833,7 +833,6 @@ if menu_option == "Uptime FRX DT (WSID)":
             .p02-header-bg {{ background-color: #f39c12 !important; color: #000000 !important; font-size: 11px; font-weight: bold; }}
             .p02-sub-header {{ background-color: #fdf3e7 !important; color: #000000 !important; font-weight: bold; }}
             
-            /* Diperpanjang menjadi 480px agar sejajar dan penuh ke bawah */
             .table-scroll {{ max-height: 480px; overflow-y: auto; overflow-x: auto; position: relative; }}
         </style>
     </head>
@@ -952,16 +951,18 @@ elif menu_option == "Uptime Harian":
 
 
         def build_uptime_daily_crm_bca_html(df, keep_months):
+            # Diubah: max-height dihapus/dibuat none agar tabel tampil full memanjang ke bawah
+            # Styling freeze dihilangkan agar pergeseran kolom kembali normal seperti semula
             html = """
             <style>
                 .excel-wrapper { display: flex; flex-direction: column; gap: 12px; }
-                .excel-container { max-height: 380px; overflow-y: auto; overflow-x: auto; border: 1px solid #7f8c8d; border-radius: 2px; background-color: #ffffff; }
+                .excel-container { overflow-x: auto; border: 1px solid #7f8c8d; border-radius: 2px; background-color: #ffffff; }
                 .excel-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-                .excel-table td, .excel-table th { border: 1px solid #a6a6a6; padding: 3px 5px; white-space: nowrap; text-align: center; }
+                .excel-table td, .excel-table th { border: 1px solid #a6a6a6; padding: 4px 6px; white-space: nowrap; text-align: center; }
                 .header-row { background-color: #d9e1f2 !important; color: #000000 !important; font-weight: bold; position: sticky; top: 0; z-index: 2; }
                 .col-no { width: 32px !important; text-align: center; }
                 .col-cse { text-align: left !important; padding-left: 6px !important; font-weight: 500; }
-                .row-section-title { background-color: #e2efda !important; color: #000000 !important; font-weight: bold; text-align: left !important; padding: 5px 10px !important; font-size: 11px; }
+                .row-section-title { background-color: #e2efda !important; color: #000000 !important; font-weight: bold; text-align: left !important; padding: 6px 10px !important; font-size: 11px; }
                 .bg-green { background-color: #c6efce !important; color: #006100 !important; font-weight: bold; }
                 .bg-red { background-color: #ffc7ce !important; color: #9c0006 !important; font-weight: bold; }
                 .row-summary { background-color: #f2f2f2 !important; font-weight: bold; }
@@ -1162,7 +1163,8 @@ elif menu_option == "Uptime Harian":
 
 
         table_html = build_uptime_daily_crm_bca_html(df_sheet2, allowed_months)
-        st.components.v1.html(table_html, height=780, scrolling=True)
+        # Tinggi komponen HTML diperbesar menjadi 1300px agar tampil penuh tanpa scroll internal
+        st.components.v1.html(table_html, height=1300, scrolling=False)
     except Exception as e:
         st.error(
             f"Terjadi kesalahan saat memproses data UPTIME DAILY CRM BCA: {e}"
