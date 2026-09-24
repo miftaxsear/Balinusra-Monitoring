@@ -449,7 +449,6 @@ if menu_option == "Uptime CSE by Tipe Mesin":
                     cse_name = str(r.iloc[1]).strip()
                     cse_upper = cse_name.upper()
                     
-                    # Validasi ketat: Kolom No harus berupa angka (menandakan baris data CSE asli)
                     is_valid_row = False
                     try:
                         if float(col_no_val) > 0:
@@ -457,7 +456,6 @@ if menu_option == "Uptime CSE by Tipe Mesin":
                     except Exception:
                         pass
 
-                    # Validasi kata kunci wilayah/kategori
                     is_excluded = any(exc in cse_upper for exc in EXCLUDED_CSE_KEYWORDS)
                     
                     if is_valid_row and cse_name and cse_name not in ["nan", "None", "-"] and not is_excluded and cse_name not in list_cse:
@@ -834,7 +832,9 @@ if menu_option == "Uptime FRX DT (WSID)":
             
             .p02-header-bg {{ background-color: #f39c12 !important; color: #000000 !important; font-size: 11px; font-weight: bold; }}
             .p02-sub-header {{ background-color: #fdf3e7 !important; color: #000000 !important; font-weight: bold; }}
-            .table-scroll {{ max-height: 290px; overflow-y: auto; overflow-x: auto; position: relative; }}
+            
+            /* Diperpanjang menjadi 480px agar sejajar dan penuh ke bawah */
+            .table-scroll {{ max-height: 480px; overflow-y: auto; overflow-x: auto; position: relative; }}
         </style>
     </head>
     <body>
@@ -1228,7 +1228,6 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                         continue
                     row_str = " ".join([v.upper() for v in row_vals])
 
-                    # Baris Judul Tabel
                     if "UPTIME" in row_str:
                         if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
                             continue
@@ -1237,7 +1236,6 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                         html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
                         continue
 
-                    # Baris Header Kolom
                     if "NO" in row_vals and (
                         "CSE" in row_vals or "PROVINSI" in row_vals or "PRIVINSI" in row_vals or "SERVICE AREA" in row_vals
                     ):
@@ -1260,7 +1258,6 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                     is_summary_or_region_row = any(k in row_str for k in ["PROVINSI", "PRIVINSI", "SERVICE AREA"])
                     is_total_row = "TOTAL" in row_str
 
-                    # Cek pencocokan CSE pada kolom ke-2 (indeks 1)
                     match_cse_row = False
                     if len(row_vals) > 1:
                         cse_val_cell = str(row.iloc[1]).strip()
