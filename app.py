@@ -951,8 +951,6 @@ elif menu_option == "Uptime Harian":
 
 
         def build_uptime_daily_crm_bca_html(df, keep_months):
-            # Diubah: max-height dihapus/dibuat none agar tabel tampil full memanjang ke bawah
-            # Styling freeze dihilangkan agar pergeseran kolom kembali normal seperti semula
             html = """
             <style>
                 .excel-wrapper { display: flex; flex-direction: column; gap: 12px; }
@@ -1163,7 +1161,6 @@ elif menu_option == "Uptime Harian":
 
 
         table_html = build_uptime_daily_crm_bca_html(df_sheet2, allowed_months)
-        # Tinggi komponen HTML diperbesar menjadi 1300px agar tampil penuh tanpa scroll internal
         st.components.v1.html(table_html, height=1300, scrolling=False)
     except Exception as e:
         st.error(
@@ -1752,14 +1749,14 @@ elif menu_option == "Teritori Mesin Engineer":
                 for _, row_data in filtered_df.iterrows():
                     teritory_rows_html.append(f"""
                     <tr>
-                        <td style="font-weight:600; vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 7%;">{row_data['wsid']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 22%;">{row_data['lokasi']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 16%;">{row_data['se']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 7%;">{row_data['type']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 12%;">{row_data['service_area']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 11%;">{row_data['sn']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; width: 15%;">{row_data['pengelola']}</td>
-                        <td style="vertical-align: top; border: 1px solid #dcdfe6; padding: 10px 10px; text-align: center; font-weight: bold; width: 10%; background-color: {row_data['uptime_bg']}; color: {row_data['uptime_color']};">{row_data['uptime']}</td>
+                        <td style="font-weight:600; vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 10%;">{row_data['wsid']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 20%;">{row_data['lokasi']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 15%;">{row_data['se']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 8%; text-align: center;">{row_data['type']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 12%;">{row_data['service_area']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 7%; text-align: center; font-size: 10px;">{row_data['sn']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; width: 18%;">{row_data['pengelola']}</td>
+                        <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; text-align: center; font-weight: bold; width: 10%; background-color: {row_data['uptime_bg']}; color: {row_data['uptime_color']};">{row_data['uptime']}</td>
                     </tr>
                     """)
             else:
@@ -1773,13 +1770,13 @@ elif menu_option == "Teritori Mesin Engineer":
             <head>
                 <style>
                     * {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }}
-                    body {{ background-color: #f4f6f9; padding: 10px; }}
+                    body {{ background-color: #f4f6f9; padding: 5px; }}
                     .visit-card {{ background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border: 1px solid #dcdfe6; }}
-                    .visit-header {{ background-color: #3598db; color: #ffffff; padding: 10px 15px; font-weight: bold; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }}
-                    .visit-table-container {{ max-height: 850px; overflow-y: auto; overflow-x: auto; }}
-                    .visit-table {{ width: 100%; border-collapse: collapse; font-size: 12px; color: #333333; table-layout: fixed; }}
-                    .visit-table th {{ background-color: #f8f9fa; color: #2c3e50; font-weight: bold; text-align: left; padding: 10px 10px; border: 1px solid #dcdfe6; position: sticky; top: 0; z-index: 1; }}
-                    .visit-table td {{ border: 1px solid #dcdfe6; padding: 10px 10px; word-wrap: break-word; }}
+                    .visit-header {{ background-color: #3598db; color: #ffffff; padding: 8px 12px; font-weight: bold; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }}
+                    .visit-table-container {{ max-height: 850px; overflow-y: auto; overflow-x: hidden; }}
+                    .visit-table {{ width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; color: #333333; }}
+                    .visit-table th {{ background-color: #f8f9fa; color: #2c3e50; font-weight: bold; text-align: left; padding: 8px 6px; border: 1px solid #dcdfe6; position: sticky; top: 0; z-index: 1; word-wrap: break-word; }}
+                    .visit-table td {{ border: 1px solid #dcdfe6; padding: 6px 8px; word-wrap: break-word; overflow: hidden; text-overflow: ellipsis; }}
                     .visit-table tr:hover {{ background-color: #f1f5f9; }}
                 </style>
             </head>
@@ -1793,13 +1790,13 @@ elif menu_option == "Teritori Mesin Engineer":
                         <table class="visit-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 7%;">WSID</th>
-                                    <th style="width: 22%;">LOKASI</th>
-                                    <th style="width: 16%;">SE</th>
-                                    <th style="width: 7%;">TYPE</th>
+                                    <th style="width: 10%;">WSID</th>
+                                    <th style="width: 20%;">LOKASI</th>
+                                    <th style="width: 15%;">SE</th>
+                                    <th style="width: 8%; text-align: center;">TYPE</th>
                                     <th style="width: 12%;">SERVICE AREA</th>
-                                    <th style="width: 11%;">SN</th>
-                                    <th style="width: 15%;">PENGELOLA</th>
+                                    <th style="width: 7%; text-align: center;">SN</th>
+                                    <th style="width: 18%;">PENGELOLA</th>
                                     <th style="width: 10%; text-align: center;">UPTIME</th>
                                 </tr>
                             </thead>
