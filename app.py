@@ -1,5 +1,6 @@
 import json
 import os
+import glob
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -7,7 +8,7 @@ import streamlit as st
 # 1. Konfigurasi Halaman Streamlit
 st.set_page_config(page_title="Balinusra Monitoring", layout="wide")
 
-# CSS Kustom untuk merapatkan layout ke kiri/atas & styling label
+# CSS Kustom untuk merapatkan layout ke kiri/atas, styling label, & memperkecil kotak Pilih Tahun
 st.markdown(
     """
     <style>
@@ -18,7 +19,9 @@ st.markdown(
             max-width: 100% !important;
         }
 
-        div[data-testid="stSelectbox"]:has(label:contains("Pilih Bulan:")) label p {
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih Tahun:")) label p,
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih Bulan:")) label p,
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih Bulan Standby:")) label p {
             background-color: #AFEEEE !important;
             color: #004D40 !important;
             padding: 2px 8px !important;
@@ -28,7 +31,8 @@ st.markdown(
         }
 
         div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik WSID:")) label p,
-        div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik CSE:")) label p {
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik CSE:")) label p,
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik PKT:")) label p {
             background-color: #FFB6C1 !important;
             color: #880E4F !important;
             padding: 2px 8px !important;
@@ -65,6 +69,7 @@ menu_options_list = [
     "Uptime PKT by Tipe Mesin",
     "Riwayat Kunjungan (Visit)",
     "Teritori Mesin Engineer",
+    "Jadwal Standby CSE",
 ]
 
 if "nav_menu" not in st.session_state:
@@ -288,9 +293,31 @@ def load_data(file_path):
 
 
 # =============================================================
-# HEADER ATAS: PILIHAN BULAN & WSID / CSE
+# DETEKSI TAHUN & BULAN OTOMATIS
 # =============================================================
-month_options = [f"2026-{m:02d}" for m in range(1, 13)]
+detected_years = set([2026, 2027])
+available_months_map = {}
+
+for f in glob.glob("JADWAL STANDBY *.xlsx"):
+    parts = f.replace(".xlsx", "").split(" ")
+    for p in parts:
+        if p.isdigit() and len(p) == 4:
+            detected_years.add(int(p))
+
+for f in glob.glob("MASTER_*.xlsx"):
+    name_no_ext = f.replace(".xlsx", "").replace("MASTER_", "")
+    y_part = name_no_ext.split("-")[0]
+    if y_part.isdigit() and len(y_part) == 4:
+        y_val = int(y_part)
+        detected_years.add(y_val)
+        if y_val not in available_months_map:
+            available_months_map[y_val] = []
+        if len(name_no_ext.split("-")) > 1:
+            m_part = name_no_ext.split("-")[1]
+            if m_part.isdigit():
+                available_months_map[y_val].append(m_part)
+
+year_options = sorted(list(detected_years))
 
 # -------------------------------------------------------------
 # 5. SIDEBAR: NAVIGASI MENU KUSTOM & PANEL ADMIN
@@ -312,6 +339,7 @@ menu_icons = {
     "Uptime PKT by Tipe Mesin": "⚙️",
     "Riwayat Kunjungan (Visit)": "📋",
     "Teritori Mesin Engineer": "🗺️",
+    "Jadwal Standby CSE": "📅",
 }
 
 for m_item in menu_options_list:
@@ -332,11 +360,17 @@ st.sidebar.divider()
 
 if st.session_state["role"] == "admin":
     st.sidebar.subheader("⚙️ Panel Admin (All Access)")
-    admin_upload_month = st.sidebar.selectbox(
-        "Upload Master Excel untuk Bulan:",
-        options=month_options,
+    admin_upload_year = st.sidebar.selectbox(
+        "Pilih Tahun File Master:",
+        options=year_options,
+        index=0,
+    )
+    admin_upload_month_num = st.sidebar.selectbox(
+        "Pilih Bulan File Master:",
+        options=[f"{m:02d}" for m in range(1, 13)],
         index=8,
     )
+    admin_upload_month = f"{admin_upload_year}-{admin_upload_month_num}"
 
     uploaded_file = st.sidebar.file_uploader(
         f"Upload File Master ({admin_upload_month}):", type=["xlsx"]
@@ -348,6 +382,18 @@ if st.session_state["role"] == "admin":
             f.write(uploaded_file.getbuffer())
         st.cache_data.clear()
         st.sidebar.success(f"File {save_file_name} berhasil diperbarui!")
+        st.rerun()
+
+    st.sidebar.markdown("---")
+    uploaded_standby_file = st.sidebar.file_uploader(
+        "Upload File Jadwal Standby (misal: JADWAL STANDBY 2026.xlsx / 2027.xlsx):", type=["xlsx"]
+    )
+    if uploaded_standby_file is not None:
+        file_save_name = uploaded_standby_file.name
+        with open(file_save_name, "wb") as f:
+            f.write(uploaded_standby_file.getbuffer())
+        st.cache_data.clear()
+        st.sidebar.success(f"File Jadwal Standby ({file_save_name}) berhasil diperbarui!")
         st.rerun()
 else:
     st.sidebar.info("👁️ **Mode Viewer**: Anda hanya memiliki akses melihat data.")
@@ -363,52 +409,113 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 
-# Inisialisasi default bulan terpilih
+# Inisialisasi default tahun & bulan terpilih
+selected_year = 2026
+selected_month_num = "09"
 selected_month = "2026-09"
 target_excel_file = f"MASTER_{selected_month}.xlsx"
 
-if menu_option != "Teritori Mesin Engineer":
-    col_btn, col_month, col_wsid = st.columns([1.5, 1, 1.2])
+month_names_dict = {
+    "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+    "05": "Mei", "06": "Jun", "07": "Jul", "08": "Agu",
+    "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des"
+}
 
-    with col_month:
-        selected_month = st.selectbox(
-            "Pilih Bulan:",
-            options=month_options,
-            index=8,
-            key="main_month_select",
+if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
+    col_btn, col_year, col_month, col_wsid = st.columns([1.5, 0.7, 0.9, 1.2])
+
+    with col_year:
+        selected_year = st.selectbox(
+            "Pilih Tahun:",
+            options=year_options,
+            index=0,
+            key="main_year_select",
         )
-
+    
+    with col_month:
+        months_list = available_months_map.get(selected_year, [f"{m:02d}" for m in range(1, 13)])
+        if selected_month_num not in months_list and months_list:
+            selected_month_num = months_list[0]
+        
+        selected_month_num = st.selectbox(
+            "Pilih Bulan:",
+            options=months_list,
+            format_func=lambda x: month_names_dict.get(x, x),
+            index=months_list.index(selected_month_num) if selected_month_num in months_list else 0,
+            key="main_month_select"
+        )
+    
+    selected_month = f"{selected_year}-{selected_month_num}"
     target_excel_file = f"MASTER_{selected_month}.xlsx"
 
     if not os.path.exists(target_excel_file):
-        if os.path.exists("MASTER.xlsx"):
-            target_excel_file = "MASTER.xlsx"
-        else:
-            st.error(
-                f"File '{target_excel_file}' atau 'MASTER.xlsx' tidak ditemukan di server!"
-            )
-            st.stop()
-else:
-    col_dummy, col_month = st.columns([3, 1])
-    with col_month:
-        selected_month = st.selectbox(
-            "Pilih Bulan:",
-            options=month_options,
-            index=8,
-            key="teritory_month_select",
-        )
-    target_excel_file = f"MASTER_{selected_month}.xlsx"
-    if not os.path.exists(target_excel_file):
-        if os.path.exists("MASTER.xlsx"):
+        matching_masters = glob.glob(f"MASTER_{selected_year}-*.xlsx")
+        if matching_masters:
+            target_excel_file = matching_masters[0]
+            selected_month = target_excel_file.replace("MASTER_", "").replace(".xlsx", "")
+        elif os.path.exists("MASTER.xlsx"):
             target_excel_file = "MASTER.xlsx"
 
-(
-    df_frx_raw,
-    df_site,
-    df_visit,
-    df_atm_summary,
-    daily_sheets,
-) = load_data(target_excel_file)
+elif menu_option == "Teritori Mesin Engineer":
+    # Untuk Teritori Mesin Engineer, filter Tahun & Bulan dipindahkan ke kanan sesuai permintaan
+    col_title, col_year, col_month, col_back = st.columns([2.4, 0.7, 0.9, 0.8])
+    
+    with col_title:
+        st.markdown(
+            f"<h4 style='margin-top: -5px; margin-bottom: 12px; color: #2c3e50; font-weight: 600; white-space: nowrap;'>🗺️ Teritori Mesin Engineer ({selected_month})</h4>",
+            unsafe_allow_html=True,
+        )
+
+    with col_year:
+        selected_year = st.selectbox(
+            "Pilih Tahun:",
+            options=year_options,
+            index=0,
+            key="teritory_year_select",
+        )
+
+    with col_month:
+        months_list = available_months_map.get(selected_year, [f"{m:02d}" for m in range(1, 13)])
+        if selected_month_num not in months_list and months_list:
+            selected_month_num = months_list[0]
+        
+        selected_month_num = st.selectbox(
+            "Pilih Bulan:",
+            options=months_list,
+            format_func=lambda x: month_names_dict.get(x, x),
+            index=months_list.index(selected_month_num) if selected_month_num in months_list else 0,
+            key="teritory_month_select"
+        )
+
+    with col_back:
+        st.write("")
+        st.button("⬅️ Back", key="btn_back_teritory", use_container_width=True, on_click=go_back_history)
+
+    selected_month = f"{selected_year}-{selected_month_num}"
+    target_excel_file = f"MASTER_{selected_month}.xlsx"
+    if not os.path.exists(target_excel_file):
+        matching_masters = glob.glob(f"MASTER_{selected_year}-*.xlsx")
+        if matching_masters:
+            target_excel_file = matching_masters[0]
+            selected_month = target_excel_file.replace("MASTER_", "").replace(".xlsx", "")
+        elif os.path.exists("MASTER.xlsx"):
+            target_excel_file = "MASTER.xlsx"
+
+df_frx_raw = pd.DataFrame()
+df_site = pd.DataFrame()
+df_visit = pd.DataFrame()
+df_atm_summary = pd.DataFrame()
+daily_sheets = {}
+
+if menu_option != "Jadwal Standby CSE":
+    if os.path.exists(target_excel_file):
+        (
+            df_frx_raw,
+            df_site,
+            df_visit,
+            df_atm_summary,
+            daily_sheets,
+        ) = load_data(target_excel_file)
 
 
 # --- FUNGSI AKUMULASI MAINVISIT 3 BULAN TERAKHIR ---
@@ -477,60 +584,94 @@ EXCLUDED_CSE_KEYWORDS = [
 list_cse = ["-- Semua CSE --"]
 if menu_option == "Uptime CSE by Tipe Mesin":
     try:
-        xls_temp = pd.ExcelFile(target_excel_file)
-        t_sheet = None
-        for s in xls_temp.sheet_names:
-            if s.upper().strip() in [
-                "BALI NUSRA",
-                "UPTIME HARIAN",
-                "UPTIME CSE",
-            ]:
-                t_sheet = s
-                break
-        if t_sheet:
-            df_temp_cse = pd.read_excel(xls_temp, t_sheet, skiprows=14, header=None)
-            for _, r in df_temp_cse.iterrows():
+        if os.path.exists(target_excel_file):
+            xls_temp = pd.ExcelFile(target_excel_file)
+            t_sheet = None
+            for s in xls_temp.sheet_names:
+                if s.upper().strip() in [
+                    "BALI NUSRA",
+                    "UPTIME HARIAN",
+                    "UPTIME CSE",
+                ]:
+                    t_sheet = s
+                    break
+            if t_sheet:
+                df_temp_cse = pd.read_excel(xls_temp, t_sheet, skiprows=14, header=None)
+                for _, r in df_temp_cse.iterrows():
+                    r_vals = [str(x).strip() for x in r.values if pd.notnull(x)]
+                    row_str = " ".join([v.upper() for v in r_vals])
+                    if "NO" in r_vals and ("CSE" in r_vals or "PROVINSI" in r_vals or "PRIVINSI" in r_vals):
+                        continue
+                    if len(r_vals) > 1 and "TOTAL" not in row_str and "UPTIME" not in row_str:
+                        col_no_val = str(r.iloc[0]).strip()
+                        cse_name = str(r.iloc[1]).strip()
+                        cse_upper = cse_name.upper()
+                        
+                        is_valid_row = False
+                        try:
+                            if float(col_no_val) > 0:
+                                is_valid_row = True
+                        except Exception:
+                            pass
+
+                        is_excluded = any(exc in cse_upper for exc in EXCLUDED_CSE_KEYWORDS)
+                        
+                        if is_valid_row and cse_name and cse_name not in ["nan", "None", "-"] and not is_excluded and cse_name not in list_cse:
+                            list_cse.append(cse_name)
+    except Exception:
+        pass
+
+list_pkt = ["-- Semua PKT --"]
+if menu_option == "Uptime PKT by Tipe Mesin":
+    try:
+        if os.path.exists(target_excel_file):
+            xls_temp = pd.ExcelFile(target_excel_file)
+            sheet_4_name = "PKT TIPE MESIN"
+            if sheet_4_name not in xls_temp.sheet_names:
+                if len(xls_temp.sheet_names) >= 4:
+                    sheet_4_name = xls_temp.sheet_names[3]
+            df_temp_pkt = pd.read_excel(xls_temp, sheet_name=sheet_4_name, header=None)
+            for _, r in df_temp_pkt.iterrows():
                 r_vals = [str(x).strip() for x in r.values if pd.notnull(x)]
                 row_str = " ".join([v.upper() for v in r_vals])
-                if "NO" in r_vals and ("CSE" in r_vals or "PROVINSI" in r_vals or "PRIVINSI" in r_vals):
+                if not r_vals:
                     continue
-                if len(r_vals) > 1 and "TOTAL" not in row_str and "UPTIME" not in row_str:
+                if "UPTIME" in row_str or "PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str:
+                    continue
+                if "NO" in r_vals and ("PKT" in r_vals or "CSE" in r_vals):
+                    continue
+                
+                if len(r_vals) > 1 and "TOTAL" not in row_str:
                     col_no_val = str(r.iloc[0]).strip()
-                    cse_name = str(r.iloc[1]).strip()
-                    cse_upper = cse_name.upper()
+                    pkt_name = str(r.iloc[1]).strip()
                     
-                    is_valid_row = False
+                    is_valid_no = False
                     try:
                         if float(col_no_val) > 0:
-                            is_valid_row = True
+                            is_valid_no = True
                     except Exception:
                         pass
 
-                    is_excluded = any(exc in cse_upper for exc in EXCLUDED_CSE_KEYWORDS)
-                    
-                    if is_valid_row and cse_name and cse_name not in ["nan", "None", "-"] and not is_excluded and cse_name not in list_cse:
-                        list_cse.append(cse_name)
+                    if is_valid_no and pkt_name and pkt_name not in ["nan", "None", "-"] and pkt_name not in list_pkt:
+                        list_pkt.append(pkt_name)
     except Exception:
         pass
 
 list_wsid = []
-if not df_site.empty and "ID" in df_site.columns:
-    list_wsid = df_site["ID"].dropna().unique().tolist()
-elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
-    list_wsid = df_atm_summary["WSID"].dropna().unique().tolist()
+if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE", "Uptime PKT by Tipe Mesin"]:
+    if not df_site.empty and "ID" in df_site.columns:
+        list_wsid = df_site["ID"].dropna().unique().tolist()
+    elif not df_atm_summary.empty and "WSID" in df_atm_summary.columns:
+        list_wsid = df_atm_summary["WSID"].dropna().unique().tolist()
 
-if "ZTR4" not in list_wsid and list_wsid:
-    list_wsid.insert(0, "ZTR4")
+    if "ZTR4" not in list_wsid and list_wsid:
+        list_wsid.insert(0, "ZTR4")
 
 selected_wsid = "ZTR4"
-
-if "selected_wsid_from_teritory" in st.session_state:
-    if st.session_state["selected_wsid_from_teritory"] in list_wsid:
-        selected_wsid = st.session_state["selected_wsid_from_teritory"]
-
 selected_cse = "-- Semua CSE --"
+selected_pkt = "-- Semua PKT --"
 
-if menu_option != "Teritori Mesin Engineer":
+if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
     with col_wsid:
         if menu_option == "Uptime CSE by Tipe Mesin":
             if list_cse:
@@ -539,6 +680,14 @@ if menu_option != "Teritori Mesin Engineer":
                     options=list_cse,
                     index=0,
                     key="main_cse_select",
+                )
+        elif menu_option == "Uptime PKT by Tipe Mesin":
+            if list_pkt:
+                selected_pkt = st.selectbox(
+                    "Pilih / Ketik PKT:",
+                    options=list_pkt,
+                    index=0,
+                    key="main_pkt_select",
                 )
         else:
             if list_wsid:
@@ -1425,7 +1574,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
     col_t, col_b = st.columns([5, 1])
     with col_t:
         st.markdown(
-            f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📊 Uptime PKT by Tipe Mesin ({selected_month})</h4>",
+            f"<h4 style='margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>📊 Uptime PKT by Tipe Mesin ({selected_month}) - PKT: <span style='color: #3498db;'>{selected_pkt}</span></h4>",
             unsafe_allow_html=True,
         )
     with col_b:
@@ -1442,7 +1591,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
         df_pkt_raw = pd.read_excel(xls, sheet_name=sheet_4_name, header=None)
 
 
-        def build_pkt_tipe_mesin_html(df):
+        def build_filtered_pkt_excel_html(df, filter_pkt):
             html = """
             <style>
                 .excel-container { max-height: 750px; overflow-y: auto; overflow-x: auto; border: 1px solid #7f8c8d; border-radius: 2px; background-color: #ffffff; }
@@ -1465,6 +1614,8 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
             <table class="excel-table"><tbody>
             """
 
+            is_filtering = (filter_pkt and filter_pkt != "-- Semua PKT --")
+
             for _, row in df.iterrows():
                 row_vals = [
                     "" if pd.isnull(x) else str(x).strip() for x in row.values
@@ -1474,11 +1625,15 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                 row_str = " ".join([v.upper() for v in row_vals])
 
                 if "UPTIME" in row_str:
+                    if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
+                        continue
                     title_text = [v for v in row_vals if v != ""][0]
                     html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
                     continue
 
-                if "NO" in row_vals and ("PKT" in row_vals or "CSE" in row_vals):
+                if "NO" in row_vals and ("PKT" in row_vals or "CSE" in row_vals or "PROVINSI" in row_vals):
+                    if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
+                        continue
                     html += '<tr class="header-excel">'
                     for col_idx, v in enumerate(row_vals[:9]):
                         cls = (
@@ -1489,6 +1644,21 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                         html += f'<td class="{cls}">{v}</td>'
                     html += "</tr>"
                     continue
+
+                is_summary_or_region_row = any(k in row_str for k in ["PROVINSI", "PRIVINSI", "SERVICE AREA"])
+                is_total_row = "TOTAL" in row_str
+
+                match_pkt_row = False
+                if len(row_vals) > 1:
+                    pkt_val_cell = str(row.iloc[1]).strip()
+                    if is_filtering and pkt_val_cell.upper() == filter_pkt.upper():
+                        match_pkt_row = True
+
+                if is_filtering:
+                    if is_summary_or_region_row or is_total_row:
+                        continue
+                    if not match_pkt_row:
+                        continue
 
                 achieve_ut_val = None
                 try:
@@ -1505,8 +1675,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                 is_pkt_red = (achieve_ut_val is not None) and (
                     achieve_ut_val < 99.20
                 )
-                is_total = "TOTAL" in row_str
-                tr_class = ' class="row-total"' if is_total else ""
+                tr_class = ' class="row-total"' if is_total_row else ""
                 html += f"<tr{tr_class}>"
 
                 for col_idx, val in enumerate(row_vals[:9]):
@@ -1519,7 +1688,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                         cell_cls.append("col-no")
                     elif col_idx == 1:
                         cell_cls.append("col-pkt")
-                        if not is_total:
+                        if not is_total_row:
                             if is_pkt_red:
                                 cell_cls.append("text-pkt-red")
                             else:
@@ -1560,7 +1729,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
             return html
 
 
-        table_html = build_pkt_tipe_mesin_html(df_pkt_raw)
+        table_html = build_filtered_pkt_excel_html(df_pkt_raw, selected_pkt)
         st.components.v1.html(table_html, height=750, scrolling=True)
     except Exception as e:
         st.error(f"Terjadi kesalahan saat memproses sheet PKT TIPE MESIN: {e}")
@@ -1714,16 +1883,7 @@ elif menu_option == "Riwayat Kunjungan (Visit)":
 # HALAMAN 6: TERITORI MESIN ENGINEER (WSID TANPA LINK)
 # =============================================================
 elif menu_option == "Teritori Mesin Engineer":
-    col_t, col_b = st.columns([5, 1])
-    with col_t:
-        st.markdown(
-            f"<h4 style='margin-top: -10px; margin-bottom: 12px; color: #2c3e50; font-weight: 600;'>🗺️ Teritori Mesin Engineer ({selected_month})</h4>",
-            unsafe_allow_html=True,
-        )
-    with col_b:
-        st.write("")
-        st.button("⬅️ Back", key="btn_back_teritory", use_container_width=True, on_click=go_back_history)
-
+    # Catatan: Judul dan filter Tahun/Bulan sudah dirender di baris atas sejajar di atas
     try:
         xls = pd.ExcelFile(target_excel_file)
         target_sname = (
@@ -1878,3 +2038,163 @@ elif menu_option == "Teritori Mesin Engineer":
             st.error("Sheet 'atm total' / sheet ke-6 tidak ditemukan pada file master excel!")
     except Exception as e:
         st.error(f"Terjadi kesalahan saat memproses data teritori mesin: {e}")
+
+
+# =============================================================
+# HALAMAN 7: JADWAL STANDBY CSE
+# =============================================================
+elif menu_option == "Jadwal Standby CSE":
+    c_title, c_year, c_month, c_back = st.columns([2.2, 0.9, 1.1, 0.8])
+    
+    with c_title:
+        st.markdown(
+            "<h4 style='margin-top: -5px; margin-bottom: 0px; color: #2c3e50; font-weight: 600; white-space: nowrap;'>📅 Jadwal Standby CSE</h4>",
+            unsafe_allow_html=True,
+        )
+
+    if "standby_selected_year" not in st.session_state:
+        st.session_state["standby_selected_year"] = 2026
+
+    with c_year:
+        st.session_state["standby_selected_year"] = st.selectbox(
+            "Pilih Tahun:",
+            options=year_options,
+            index=year_options.index(st.session_state["standby_selected_year"]) if st.session_state["standby_selected_year"] in year_options else 0,
+            key="standby_year_select"
+        )
+
+    current_standby_year = st.session_state["standby_selected_year"]
+    standby_file = f"JADWAL STANDBY {current_standby_year}.xlsx"
+    if not os.path.exists(standby_file) and os.path.exists("JADWAL STANDBY 2026.xlsx"):
+        standby_file = "JADWAL STANDBY 2026.xlsx"
+
+    sheet_names = ["Sheet1"]
+    if os.path.exists(standby_file):
+        try:
+            import openpyxl
+            wb_standby = openpyxl.load_workbook(standby_file, data_only=True)
+            sheet_names = wb_standby.sheetnames
+        except Exception:
+            pass
+
+    with c_month:
+        selected_standby_sheet = st.selectbox(
+            "Pilih Bulan Standby:", 
+            options=sheet_names, 
+            index=0,
+            key="standby_sheet_select"
+        )
+
+    with c_back:
+        st.write("")
+        st.button("⬅️ Back", key="btn_back_standby", use_container_width=True, on_click=go_back_history)
+
+    if not os.path.exists(standby_file):
+        st.warning(f"File `JADWAL STANDBY {current_standby_year}.xlsx` belum diunggah. Silakan upload file jadwal standby melalui panel Admin di sidebar.")
+    else:
+        try:
+            wb_standby = openpyxl.load_workbook(standby_file, data_only=True)
+            ws_st = wb_standby[selected_standby_sheet]
+            
+            def render_exact_standby_table(ws):
+                merged_map = {}
+                for rng in ws.merged_cells.ranges:
+                    min_col, min_row, max_col, max_row = rng.min_col, rng.min_row, rng.max_col, rng.max_row
+                    merged_map[(min_row, min_col)] = {
+                        "rowspan": max_row - min_row + 1,
+                        "colspan": max_col - min_col + 1
+                    }
+                    for r in range(min_row, max_row + 1):
+                        for c in range(min_col, max_col + 1):
+                            if (r, c) != (min_row, min_col):
+                                merged_map[(r, c)] = "SKIP"
+
+                html = """
+                <style>
+                    .standby-container { max-height: 750px; overflow-y: auto; overflow-x: auto; border: 1px solid #a6a6a6; border-radius: 2px; background-color: #ffffff; }
+                    .standby-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                    .standby-table td, .standby-table th { border: 1px solid #d9d9d9; padding: 4px 6px; white-space: nowrap; text-align: center; vertical-align: middle; }
+                </style>
+                <div class="standby-container">
+                <table class="standby-table"><tbody>
+                """
+                
+                max_row = ws.max_row
+                max_col = ws.max_column
+                
+                for r in range(1, max_row + 1):
+                    row_vals = [ws.cell(row=r, column=c).value for c in range(1, max_col + 1)]
+                    if all(v is None for v in row_vals):
+                        continue
+                    
+                    html += "<tr>"
+                    for c in range(1, max_col + 1):
+                        cell_status = merged_map.get((r, c), None)
+                        if cell_status == "SKIP":
+                            continue
+                        
+                        cell = ws.cell(row=r, column=c)
+                        val = cell.value if cell.value is not None else ""
+                        
+                        span_attrs = ""
+                        if cell_status and isinstance(cell_status, dict):
+                            if cell_status["rowspan"] > 1:
+                                span_attrs += f' rowspan="{cell_status["rowspan"]}"'
+                            if cell_status["colspan"] > 1:
+                                span_attrs += f' colspan="{cell_status["colspan"]}"'
+
+                        bg_style = ""
+                        text_color = "#000000"
+                        
+                        if cell.fill and cell.fill.fill_type:
+                            fg = cell.fill.fgColor
+                            if fg:
+                                f_val = str(getattr(fg, 'value', ''))
+                                if len(f_val) == 8 and f_val.startswith('FF'):
+                                    hex_val = "#" + f_val[2:]
+                                    bg_style = f"background-color: {hex_val};"
+                                    if hex_val.lower() in ["#ff0000", "#00b0f0", "#7030a0", "#002060"]:
+                                        text_color = "#ffffff;"
+                                elif hasattr(fg, 'type') and fg.type == 'theme':
+                                    theme_map = {
+                                        6: "#c6efce",  # Hijau muda (Denpasar)
+                                        7: "#e1d5e7",  # Ungu muda (Negara)
+                                        8: "#daeef3",  # Biru muda (Kupang)
+                                        2: "#fce4d6",  # Pink/Merah muda (Mataram)
+                                        5: "#f8cbad",  # Oranye muda (Lombok Timur)
+                                        9: "#fff2cc"   # Kuning muda (Bima / Singaraja / Sumbawa)
+                                    }
+                                    t_idx = getattr(fg, 'theme', None)
+                                    if t_idx in theme_map:
+                                        bg_style = f"background-color: {theme_map[t_idx]};"
+
+                        if cell.font and cell.font.color and hasattr(cell.font.color, 'value'):
+                            f_col = str(cell.font.color.value).upper()
+                            if len(f_col) == 8 and f_col.startswith('FF'):
+                                text_color = "#" + f_col[2:] + ";"
+
+                        font_bold = "font-weight: bold;" if (cell.font and cell.font.bold) else ""
+                        
+                        align_style = "text-align: center;"
+                        if c in [2, 5]: 
+                            align_style = "text-align: left; padding-left: 8px;"
+                        elif c == 4: 
+                            align_style = "text-align: left;"
+                            
+                        custom_style = f"{bg_style} color: {text_color} {font_bold} {align_style}"
+                        
+                        if r == 1 and c == 1:
+                            html += f'<td colspan="{max_col}" style="background-color: #00b0f0; color: #ffffff; font-weight: bold; font-size: 13px; text-align: center; padding: 8px;">{val}</td>'
+                            break
+                        elif r == 1:
+                            continue
+                            
+                        html += f'<td{span_attrs} style="{custom_style}">{val}</td>'
+                    html += "</tr>"
+                html += "</tbody></table></div>"
+                return html
+
+            st.components.v1.html(render_exact_standby_table(ws_st), height=750, scrolling=True)
+
+        except Exception as e:
+            st.error(f"Terjadi kesalahan saat memproses file Jadwal Standby: {e}")
