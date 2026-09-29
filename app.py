@@ -409,7 +409,7 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 
-# Inisialisasi default tahun & bulan terpilih
+# Inisialisasi default tahun & bulan terpilih dengan pengurutan bulan kronologis dan bulan aktif di paling atas
 selected_year = 2026
 selected_month_num = "09"
 selected_month = "2026-09"
@@ -420,6 +420,17 @@ month_names_dict = {
     "05": "Mei", "06": "Jun", "07": "Jul", "08": "Agu",
     "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des"
 }
+
+def get_ordered_months(year):
+    base_months = available_months_map.get(year, [f"{m:02d}" for m in range(1, 13)])
+    # Diurutkan secara kronologis terlebih dahulu (01 s.d 12)
+    sorted_months = sorted(list(set(base_months)), key=lambda x: int(x))
+    
+    # Tempatkan bulan aktif/terpilih ke posisi paling atas (index 0)
+    if selected_month_num in sorted_months:
+        sorted_months.remove(selected_month_num)
+        sorted_months.insert(0, selected_month_num)
+    return sorted_months
 
 if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
     col_btn, col_year, col_month, col_wsid = st.columns([1.5, 0.7, 0.9, 1.2])
@@ -433,7 +444,7 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
         )
     
     with col_month:
-        months_list = available_months_map.get(selected_year, [f"{m:02d}" for m in range(1, 13)])
+        months_list = get_ordered_months(selected_year)
         if selected_month_num not in months_list and months_list:
             selected_month_num = months_list[0]
         
@@ -457,7 +468,6 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
             target_excel_file = "MASTER.xlsx"
 
 elif menu_option == "Teritori Mesin Engineer":
-    # Untuk Teritori Mesin Engineer, filter Tahun & Bulan dipindahkan ke kanan sesuai permintaan
     col_title, col_year, col_month, col_back = st.columns([2.4, 0.7, 0.9, 0.8])
     
     with col_title:
@@ -475,7 +485,7 @@ elif menu_option == "Teritori Mesin Engineer":
         )
 
     with col_month:
-        months_list = available_months_map.get(selected_year, [f"{m:02d}" for m in range(1, 13)])
+        months_list = get_ordered_months(selected_year)
         if selected_month_num not in months_list and months_list:
             selected_month_num = months_list[0]
         
@@ -1284,7 +1294,7 @@ elif menu_option == "Uptime Harian":
                     else:
                         rows_pengelola.append((row_idx, row_vals, row_str))
 
-                def render_section_table(title, rows_list):
+                def render_section_title(title, rows_list):
                     sec_html = f'<div class="excel-container"><table class="excel-table"><tbody>'
                     sec_html += f'<tr><td colspan="{len(valid_col_indices)}" class="row-section-title">{title}</td></tr>'
 
@@ -1368,9 +1378,9 @@ elif menu_option == "Uptime Harian":
                     sec_html += "</tbody></table></div>"
                     return sec_html
 
-                html += render_section_table("ENGINEER", rows_engineer)
+                html += render_section_title("ENGINEER", rows_engineer)
                 if rows_pengelola:
-                    html += render_section_table("PENGELOLA", rows_pengelola)
+                    html += render_section_title("PENGELOLA", rows_pengelola)
                 html += "</div>"
                 return html
 
@@ -1631,7 +1641,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                     html += f'<tr><td colspan="9" class="title-green-excel">{title_text}</td></tr>'
                     continue
 
-                if "NO" in row_vals and ("PKT" in row_vals or "CSE" in row_vals or "PROVINSI" in row_vals):
+                if "NO" in row_vals and ("PKT" in row_vals or "CSE" in row_vals or "PROVINSI" in row_str):
                     if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
                         continue
                     html += '<tr class="header-excel">'
@@ -1883,7 +1893,6 @@ elif menu_option == "Riwayat Kunjungan (Visit)":
 # HALAMAN 6: TERITORI MESIN ENGINEER (WSID TANPA LINK)
 # =============================================================
 elif menu_option == "Teritori Mesin Engineer":
-    # Catatan: Judul dan filter Tahun/Bulan sudah dirender di baris atas sejajar di atas
     try:
         xls = pd.ExcelFile(target_excel_file)
         target_sname = (
@@ -1984,7 +1993,7 @@ elif menu_option == "Teritori Mesin Engineer":
                         <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px;">{r_data['SERVICE AREA']}</td>
                         <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; font-size: 10px;">{r_data['SN']}</td>
                         <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px;">{r_data['PENGELOLA']}</td>
-                        <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; font-weight: bold; background-color: {'#c6efce' if r_data['uptime_float'] >= 99.20 else '#ffc7ce'}; color: {'#006100' if r_data['uptime_float'] >= 99.20 else '#9c0006'};">{r_data['UPTIME']}</td>
+                        <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; font-weight: bold; background-color: {'#c6efce' if r_data['uptime_float'] >= 99.20 else '#ffc7ce'}; color: {'#006100' if r_data['uptime_float'] >= 99.20 else '#9c0006'};">{r_data['UPTIME']}</td>
                     </tr>
                     """)
 
