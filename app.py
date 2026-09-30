@@ -423,10 +423,7 @@ month_names_dict = {
 
 def get_ordered_months(year):
     base_months = available_months_map.get(year, [f"{m:02d}" for m in range(1, 13)])
-    # Diurutkan secara kronologis terlebih dahulu (01 s.d 12)
     sorted_months = sorted(list(set(base_months)), key=lambda x: int(x))
-    
-    # Tempatkan bulan aktif/terpilih ke posisi paling atas (index 0)
     if selected_month_num in sorted_months:
         sorted_months.remove(selected_month_num)
         sorted_months.insert(0, selected_month_num)
@@ -1184,7 +1181,7 @@ elif menu_option == "Uptime Harian":
                 html = """
                 <style>
                     .excel-wrapper { display: flex; flex-direction: column; gap: 12px; }
-                    .excel-container { overflow-x: auto; max-height: 750px; border: 1px solid #7f8c8d; border-radius: 2px; background-color: #ffffff; }
+                    .excel-container { overflow-x: auto; overflow-y: visible !important; max-height: none !important; border: 1px solid #7f8c8d; border-radius: 2px; background-color: #ffffff; }
                     .excel-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
                     .excel-table td, .excel-table th { border: 1px solid #a6a6a6; padding: 4px 6px; white-space: nowrap; text-align: center; }
                     .header-row { background-color: #8ea9db !important; color: #000000 !important; font-weight: bold; position: sticky; top: 0; z-index: 2; }
@@ -1206,7 +1203,7 @@ elif menu_option == "Uptime Harian":
                         "" if pd.isnull(x) else str(x).strip().upper()
                         for x in r.values
                     ]
-                    if "NO" in r_vals and "CSE" in r_vals:
+                    if "NO" in r_vals and ("CSE" in r_vals or "PKT" in r_vals):
                         header_row_idx = r_idx
                         for col_i, col_v in enumerate(r_vals):
                             if col_i in [0, 1, 2]:
@@ -1299,7 +1296,11 @@ elif menu_option == "Uptime Harian":
                     sec_html += f'<tr><td colspan="{len(valid_col_indices)}" class="row-section-title">{title}</td></tr>'
 
                     for row_idx, row_vals, row_str in rows_list:
-                        if "NO" in row_vals and "CSE" in row_vals:
+                        is_header_row = ("NO" in [v.upper() for v in row_vals]) and (
+                            "CSE" in [v.upper() for v in row_vals] or "PKT" in [v.upper() for v in row_vals]
+                        )
+                        
+                        if is_header_row:
                             sec_html += '<tr class="header-row">'
                             for col_idx in valid_col_indices:
                                 v = (
@@ -1385,7 +1386,7 @@ elif menu_option == "Uptime Harian":
                 return html
 
             table_html = build_uptime_daily_html(df_sheet2, allowed_months)
-            st.components.v1.html(table_html, height=800, scrolling=True)
+            st.components.v1.html(table_html, height=1400, scrolling=True)
         else:
             st.error("Sheet Uptime Harian tidak ditemukan di file Excel.")
     except Exception as e:
@@ -1465,7 +1466,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                         continue
 
                     if "NO" in row_vals and (
-                        "CSE" in row_vals or "PROVINSI" in row_vals or "PRIVINSI" in row_vals or "SERVICE AREA" in row_vals
+                        "CSE" in row_vals or "PROVINSI" in row_vals or "PRIVINSI" in row_vals or "SERVICE AREA" in row_str
                     ):
                         if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
                             continue
@@ -1479,6 +1480,13 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                                     "col-cse" if col_idx == 1 else "center"
                                 )
                             )
+                            if col_idx >= 3:
+                                try:
+                                    f_val = float(v)
+                                    if f_val.is_integer():
+                                        v = str(int(f_val))
+                                except Exception:
+                                    pass
                             html += f'<td class="{cls}">{v}</td>'
                         html += "</tr>"
                         continue
@@ -1651,6 +1659,13 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                             if col_idx == 0
                             else ("col-pkt" if col_idx == 1 else "center")
                         )
+                        if col_idx >= 3:
+                            try:
+                                f_val = float(v)
+                                if f_val.is_integer():
+                                    v = str(int(f_val))
+                            except Exception:
+                                pass
                         html += f'<td class="{cls}">{v}</td>'
                     html += "</tr>"
                     continue
