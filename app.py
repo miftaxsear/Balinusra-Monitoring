@@ -470,7 +470,7 @@ elif menu_option == "Teritori Mesin Engineer":
     
     with col_title:
         st.markdown(
-            f"<h4 style='margin-top: -5px; margin-bottom: 12px; color: #2c3e50; font-weight: 600; white-space: nowrap;'>🗺️ Teritori Mesin Engineer ({selected_month})</h4>",
+            f"<h4 style='margin-top: -5px; margin-bottom: 12px; color: #2c3e50; font-weight: 600; white-space: nowrap;'>🗺️️ Teritori Mesin Engineer ({selected_month})</h4>",
             unsafe_allow_html=True,
         )
 
@@ -1495,6 +1495,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
 
                 is_filtering = (filter_cse and filter_cse != "-- Semua CSE --")
                 current_table_target_ut = 99.20  # Default CRM
+                current_table_target_dt = 0.80   # Default DT threshold
 
                 for _, row in df.iterrows():
                     row_vals = [
@@ -1508,8 +1509,10 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                     if "UPTIME" in row_str:
                         if "ATM" in row_str:
                             current_table_target_ut = 99.75
+                            current_table_target_dt = 0.25
                         else:
                             current_table_target_ut = 99.20
+                            current_table_target_dt = 0.80
 
                         if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
                             continue
@@ -1607,11 +1610,20 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                                 )
                             elif col_idx == 8:
                                 display_val = f"{num_val:.2f}"
-                                cell_cls.append(
-                                    "text-red"
-                                    if num_val > 0.80
-                                    else "text-green"
-                                )
+                                if current_table_target_dt == 0.25:
+                                    # Aturan khusus ATM: > 0.25 merah, <= 0.25 hijau
+                                    cell_cls.append(
+                                        "text-red"
+                                        if num_val > 0.25
+                                        else "text-green"
+                                    )
+                                else:
+                                    # Aturan standar: > 0.80 merah, <= 0.80 hijau
+                                    cell_cls.append(
+                                        "text-red"
+                                        if num_val > 0.80
+                                        else "text-green"
+                                    )
                             elif num_val.is_integer():
                                 display_val = str(int(num_val))
                             else:
@@ -1686,6 +1698,7 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
             """
 
             is_filtering = (filter_pkt and filter_pkt != "-- Semua PKT --")
+            current_table_target_dt = 0.80
 
             for _, row in df.iterrows():
                 row_vals = [
@@ -1696,6 +1709,11 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                 row_str = " ".join([v.upper() for v in row_vals])
 
                 if "UPTIME" in row_str:
+                    if "ATM" in row_str:
+                        current_table_target_dt = 0.25
+                    else:
+                        current_table_target_dt = 0.80
+
                     if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
                         continue
                     title_text = [v for v in row_vals if v != ""][0]
@@ -1786,11 +1804,18 @@ elif menu_option == "Uptime PKT by Tipe Mesin":
                             )
                         elif col_idx == 8:
                             display_val = f"{num_val:.2f}"
-                            cell_cls.append(
-                                "text-red"
-                                if num_val > 0.80
-                                else "text-green"
-                            )
+                            if current_table_target_dt == 0.25:
+                                cell_cls.append(
+                                    "text-red"
+                                    if num_val > 0.25
+                                    else "text-green"
+                                )
+                            else:
+                                cell_cls.append(
+                                    "text-red"
+                                    if num_val > 0.80
+                                    else "text-green"
+                                )
                         elif num_val.is_integer():
                             display_val = str(int(num_val))
                         else:
@@ -2060,7 +2085,6 @@ elif menu_option == "Teritori Mesin Engineer":
                 if selected_pengelola:
                     filtered_df = filtered_df[filtered_df["PENGELOLA"].isin(selected_pengelola)]
                 
-                # Logika Sorting berdasarkan Filter FRX
                 if selected_frx_sort == "FRX Tertinggi":
                     filtered_df = filtered_df.sort_values(by="frx_float", ascending=False)
                 elif selected_frx_sort == "FRX Terendah":
