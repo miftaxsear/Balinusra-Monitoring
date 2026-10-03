@@ -31,6 +31,7 @@ st.markdown(
         }
 
         div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik WSID:")) label p,
+        div[data-testid="stSelectbox"]:has(label:contains("Pilih CSE / Pengelola:")) label p,
         div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik CSE:")) label p,
         div[data-testid="stSelectbox"]:has(label:contains("Pilih / Ketik PKT:")) label p {
             background-color: #FFB6C1 !important;
@@ -589,7 +590,7 @@ EXCLUDED_CSE_KEYWORDS = [
 ]
 
 list_cse = ["-- Semua CSE --"]
-if menu_option == "Uptime CSE by Tipe Mesin":
+if menu_option in ["Uptime CSE by Tipe Mesin", "Uptime Harian"]:
     try:
         if os.path.exists(target_excel_file):
             xls_temp = pd.ExcelFile(target_excel_file)
@@ -599,17 +600,17 @@ if menu_option == "Uptime CSE by Tipe Mesin":
                     "BALI NUSRA",
                     "UPTIME HARIAN",
                     "UPTIME CSE",
-                ]:
+                ] or ("UPTIME" in s.upper() and ("HARIAN" in s.upper() or "DAILY" in s.upper() or "CRM" in s.upper())):
                     t_sheet = s
                     break
             if t_sheet:
-                df_temp_cse = pd.read_excel(xls_temp, t_sheet, skiprows=14, header=None)
+                df_temp_cse = pd.read_excel(xls_temp, t_sheet, skiprows=14 if "BALI NUSRA" in t_sheet.upper() or "HARIAN" in t_sheet.upper() else 0, header=None)
                 for _, r in df_temp_cse.iterrows():
                     r_vals = [str(x).strip() for x in r.values if pd.notnull(x)]
                     row_str = " ".join([v.upper() for v in r_vals])
                     if "NO" in r_vals and ("CSE" in r_vals or "PROVINSI" in r_vals or "PRIVINSI" in r_vals):
                         continue
-                    if len(r_vals) > 1 and "TOTAL" not in row_str and "UPTIME" not in row_str:
+                    if len(r_vals) > 1 and "TOTAL" not in row_str and "UPTIME" not in row_str and "ENGINEER" not in row_str and "PENGELOLA" not in row_str:
                         col_no_val = str(r.iloc[0]).strip()
                         cse_name = str(r.iloc[1]).strip()
                         cse_upper = cse_name.upper()
@@ -677,6 +678,7 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE", "Uptime 
 selected_wsid = "ZTR4"
 selected_cse = "-- Semua CSE --"
 selected_pkt = "-- Semua PKT --"
+selected_daily_cse = "-- Semua CSE --"
 
 if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
     with col_wsid:
@@ -695,6 +697,14 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
                     options=list_pkt,
                     index=0,
                     key="main_pkt_select",
+                )
+        elif menu_option == "Uptime Harian":
+            if list_cse:
+                selected_daily_cse = st.selectbox(
+                    "Pilih CSE / Pengelola:",
+                    options=list_cse,
+                    index=0,
+                    key="main_daily_cse_select",
                 )
         else:
             if list_wsid:
@@ -719,12 +729,19 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
         def go_to_visit():
             change_page("Riwayat Kunjungan (Visit)")
 
-        st.button(
-            f"🔗 Buka Riwayat Kunjungan ({selected_wsid})",
-            type="primary",
-            use_container_width=True,
-            on_click=go_to_visit,
-        )
+        if menu_option == "Uptime Harian":
+            st.button(
+                f"📊 Filter Uptime Harian",
+                type="primary",
+                use_container_width=True,
+            )
+        else:
+            st.button(
+                f"🔗 Buka Riwayat Kunjungan ({selected_wsid})",
+                type="primary",
+                use_container_width=True,
+                on_click=go_to_visit,
+            )
 
 
 # =============================================================
@@ -1140,7 +1157,8 @@ if menu_option == "Uptime FRX DT (WSID)":
 elif menu_option == "Uptime Harian":
     col_t, col_b = st.columns([5, 1])
     with col_t:
-        st.markdown(f"<h4 style='margin-bottom: 12px; color: #2c3e50;'>Uptime Harian ({selected_month})</h4>", unsafe_allow_html=True)
+        filter_info_text = f" - Filter CSE / Pengelola: <span style='color: #3498db;'>{selected_daily_cse}</span>" if selected_daily_cse != "-- Semua CSE --" else ""
+        st.markdown(f"<h4 style='margin-bottom: 12px; color: #2c3e50;'>Uptime Harian ({selected_month}){filter_info_text}</h4>", unsafe_allow_html=True)
     with col_b:
         st.write("")
         st.button("⬅️ Back", key="btn_back_daily", use_container_width=True, on_click=go_back_history)
@@ -1177,7 +1195,7 @@ elif menu_option == "Uptime Harian":
             start_idx = max(0, selected_m_num - 3)
             allowed_months = ALL_MONTHS[start_idx:selected_m_num]
 
-            def build_uptime_daily_html(df, keep_months):
+            def build_uptime_daily_html(df, keep_months, filter_cse):
                 html = """
                 <style>
                     .excel-wrapper { display: flex; flex-direction: column; gap: 12px; }
@@ -1269,6 +1287,8 @@ elif menu_option == "Uptime Harian":
                 rows_pengelola = []
                 current_section = "ENGINEER"
 
+                is_filtering = (filter_cse and filter_cse != "-- Semua CSE --")
+
                 for row_idx, row in df.iterrows():
                     row_vals = [
                         "" if pd.isnull(x) else str(x).strip() for x in row.values
@@ -1281,17 +1301,44 @@ elif menu_option == "Uptime Harian":
                         continue
 
                     if "ENGINEER" in row_str or "UT :" in row_str:
+                        current_section = "ENGINEER"
                         continue
                     if "PENGELOLA" in row_str:
                         current_section = "PENGELOLA"
                         continue
 
-                    if current_section == "ENGINEER":
-                        rows_engineer.append((row_idx, row_vals, row_str))
-                    else:
-                        rows_pengelola.append((row_idx, row_vals, row_str))
+                    if is_filtering and current_section == "PENGELOLA":
+                        continue
+
+                    match_filter = True
+                    if is_filtering:
+                        is_header = ("NO" in [v.upper() for v in row_vals]) and ("CSE" in [v.upper() for v in row_vals] or "PKT" in [v.upper() for v in row_vals])
+                        is_total_or_sec = any(k in row_str for k in ["TOTAL", "PENGELOLA", "ENGINEER", "ID TIDAK TERCAPAI"])
+                        
+                        if is_header:
+                            match_filter = True
+                        elif is_total_or_sec:
+                            match_filter = False
+                        else:
+                            row_cse_name = str(row.iloc[1]).strip() if len(row_vals) > 1 else ""
+                            if row_cse_name.upper() == filter_cse.upper():
+                                match_filter = True
+                            else:
+                                match_filter = False
+
+                    if match_filter:
+                        if current_section == "ENGINEER":
+                            rows_engineer.append((row_idx, row_vals, row_str))
+                        else:
+                            rows_pengelola.append((row_idx, row_vals, row_str))
 
                 def render_section_title(title, rows_list):
+                    if not rows_list:
+                        return ""
+                    actual_data_count = sum(1 for r_i, r_v, r_s in rows_list if not (("NO" in [x.upper() for x in r_v]) and ("CSE" in [x.upper() for x in r_v])))
+                    if is_filtering and actual_data_count == 0:
+                        return ""
+
                     sec_html = f'<div class="excel-container"><table class="excel-table"><tbody>'
                     sec_html += f'<tr><td colspan="{len(valid_col_indices)}" class="row-section-title">{title}</td></tr>'
 
@@ -1380,12 +1427,12 @@ elif menu_option == "Uptime Harian":
                     return sec_html
 
                 html += render_section_title("ENGINEER", rows_engineer)
-                if rows_pengelola:
+                if not is_filtering and rows_pengelola:
                     html += render_section_title("PENGELOLA", rows_pengelola)
                 html += "</div>"
                 return html
 
-            table_html = build_uptime_daily_html(df_sheet2, allowed_months)
+            table_html = build_uptime_daily_html(df_sheet2, allowed_months, selected_daily_cse)
             st.components.v1.html(table_html, height=1400, scrolling=True)
         else:
             st.error("Sheet Uptime Harian tidak ditemukan di file Excel.")
@@ -1447,6 +1494,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                 """
 
                 is_filtering = (filter_cse and filter_cse != "-- Semua CSE --")
+                current_table_target_ut = 99.20  # Default CRM
 
                 for _, row in df.iterrows():
                     row_vals = [
@@ -1458,6 +1506,11 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                     row_str = " ".join([v.upper() for v in row_vals])
 
                     if "UPTIME" in row_str:
+                        if "ATM" in row_str:
+                            current_table_target_ut = 99.75
+                        else:
+                            current_table_target_ut = 99.20
+
                         if is_filtering and ("PROVINSI" in row_str or "PRIVINSI" in row_str or "SERVICE AREA" in row_str):
                             continue
                         
@@ -1519,7 +1572,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                         pass
 
                     is_cse_red = (achieve_ut_val is not None) and (
-                        achieve_ut_val < 99.20
+                        achieve_ut_val < current_table_target_ut
                     )
                     tr_class = ' class="row-total"' if is_total_row else ""
                     html += f"<tr{tr_class}>"
@@ -1549,7 +1602,7 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                                 display_val = f"{num_val:.2f}"
                                 cell_cls.append(
                                     "bg-light-green"
-                                    if num_val >= 99.20
+                                    if num_val >= current_table_target_ut
                                     else "bg-pink-red"
                                 )
                             elif col_idx == 8:
@@ -1933,6 +1986,15 @@ elif menu_option == "Teritori Mesin Engineer":
                     sa_val = str(r.iloc[9]) if len(r) > 9 and pd.notnull(r.iloc[9]) else "-"
                     sn_val = str(r.iloc[33]) if len(r) > 33 and pd.notnull(r.iloc[33]) else "-"
                     p_val = str(r.iloc[4]) if len(r) > 4 and pd.notnull(r.iloc[4]) else "-"
+                    
+                    frx_val = r.iloc[13] if len(r) > 13 and pd.notnull(r.iloc[13]) else 0
+                    try:
+                        frx_float = float(frx_val)
+                        frx_formatted = str(int(frx_float)) if frx_float.is_integer() else f"{frx_float:.2f}"
+                    except Exception:
+                        frx_float = 0.0
+                        frx_formatted = "0"
+
                     u_val = r.iloc[35] if len(r) > 35 and pd.notnull(r.iloc[35]) else None  
 
                     if w_val.upper() not in ["WSID", "ID", "NAN", "NONE", "-"] and w_val.strip() != "":
@@ -1951,6 +2013,8 @@ elif menu_option == "Teritori Mesin Engineer":
                             "SERVICE AREA": sa_val,
                             "SN": sn_val,
                             "PENGELOLA": p_val,
+                            "FRX": frx_formatted,
+                            "frx_float": frx_float,
                             "UPTIME": u_formatted,
                             "uptime_float": u_float
                         })
@@ -1959,11 +2023,14 @@ elif menu_option == "Teritori Mesin Engineer":
                 df_rec = pd.DataFrame(all_records)
                 
                 with st.expander("🔍 Filter Data Teritori", expanded=True):
-                    f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
+                    f_col1, f_col_frx, f_col2, f_col3, f_col4, f_col5 = st.columns(6)
                     
                     with f_col1:
                         unique_se = sorted(df_rec["SE"].dropna().unique().tolist())
                         selected_se = st.multiselect("Filter SE:", options=unique_se)
+                        
+                    with f_col_frx:
+                        selected_frx_sort = st.selectbox("Filter FRX:", options=["-- Pilih Urutan --", "FRX Tertinggi", "FRX Terendah"])
                         
                     with f_col2:
                         unique_type = sorted(df_rec["TYPE"].dropna().unique().tolist())
@@ -1993,11 +2060,26 @@ elif menu_option == "Teritori Mesin Engineer":
                 if selected_pengelola:
                     filtered_df = filtered_df[filtered_df["PENGELOLA"].isin(selected_pengelola)]
                 
-                filtered_df = filtered_df.sort_values(by="uptime_float", ascending=True)
+                # Logika Sorting berdasarkan Filter FRX
+                if selected_frx_sort == "FRX Tertinggi":
+                    filtered_df = filtered_df.sort_values(by="frx_float", ascending=False)
+                elif selected_frx_sort == "FRX Terendah":
+                    filtered_df = filtered_df.sort_values(by="frx_float", ascending=True)
+                else:
+                    filtered_df = filtered_df.sort_values(by="uptime_float", ascending=True)
 
                 teritory_rows_html = []
                 for _, r_data in filtered_df.iterrows():
                     wsid_val = r_data["WSID"]
+                    m_type_val = str(r_data["TYPE"]).upper()
+                    target_ut_val = 99.75 if "ATM" in m_type_val else 99.20
+                    is_success = r_data["uptime_float"] >= target_ut_val
+                    
+                    bg_color = '#c6efce' if is_success else '#ffc7ce'
+                    txt_color = '#006100' if is_success else '#9c0006'
+                    
+                    frx_color = '#c00000' if r_data["frx_float"] > 0 else '#000000'
+                    frx_font_weight = 'bold' if r_data["frx_float"] > 0 else 'normal'
                     
                     teritory_rows_html.append(f"""
                     <tr>
@@ -2008,11 +2090,12 @@ elif menu_option == "Teritori Mesin Engineer":
                         <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px;">{r_data['SERVICE AREA']}</td>
                         <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; font-size: 10px;">{r_data['SN']}</td>
                         <td style="vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px;">{r_data['PENGELOLA']}</td>
-                        <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; font-weight: bold; background-color: {'#c6efce' if r_data['uptime_float'] >= 99.20 else '#ffc7ce'}; color: {'#006100' if r_data['uptime_float'] >= 99.20 else '#9c0006'};">{r_data['UPTIME']}</td>
+                        <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; padding: 6px 8px; font-weight: {frx_font_weight}; color: {frx_color};">{r_data['FRX']}</td>
+                        <td style="text-align: center; vertical-align: middle; border: 1px solid #dcdfe6; font-weight: bold; background-color: {bg_color}; color: {txt_color};">{r_data['UPTIME']}</td>
                     </tr>
                     """)
 
-                body_teritory_html = "".join(teritory_rows_html) if teritory_rows_html else '<tr><td colspan="8" style="text-align:center; padding:20px; color:#666;">Tidak ada data yang sesuai dengan filter</td></tr>'
+                body_teritory_html = "".join(teritory_rows_html) if teritory_rows_html else '<tr><td colspan="9" style="text-align:center; padding:20px; color:#666;">Tidak ada data yang sesuai dengan filter</td></tr>'
 
                 custom_table_html = f"""
                 <!DOCTYPE html>
@@ -2035,13 +2118,14 @@ elif menu_option == "Teritori Mesin Engineer":
                             <table class="teritory-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 10%;">WSID</th>
-                                        <th style="width: 22%;">LOKASI</th>
-                                        <th style="width: 16%;">SE</th>
-                                        <th style="width: 8%;">TYPE</th>
-                                        <th style="width: 12%;">SERVICE AREA</th>
+                                        <th style="width: 9%;">WSID</th>
+                                        <th style="width: 20%;">LOKASI</th>
+                                        <th style="width: 15%;">SE</th>
+                                        <th style="width: 7%;">TYPE</th>
+                                        <th style="width: 11%;">SERVICE AREA</th>
                                         <th style="width: 7%;">SN</th>
-                                        <th style="width: 15%;">PENGELOLA</th>
+                                        <th style="width: 14%;">PENGELOLA</th>
+                                        <th style="width: 7%;">FRX</th>
                                         <th style="width: 10%;">UPTIME</th>
                                     </tr>
                                 </thead>
