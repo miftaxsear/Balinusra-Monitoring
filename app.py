@@ -294,10 +294,11 @@ def load_data(file_path):
 
 
 # =============================================================
-# DETEKSI TAHUN & BULAN OTOMATIS
+# DETEKSI TAHUN & BULAN TERUPDATE OTOMATIS
 # =============================================================
 detected_years = set([2026, 2027])
 available_months_map = {}
+all_master_files = glob.glob("MASTER_*.xlsx")
 
 for f in glob.glob("JADWAL STANDBY *.xlsx"):
     parts = f.replace(".xlsx", "").split(" ")
@@ -305,20 +306,36 @@ for f in glob.glob("JADWAL STANDBY *.xlsx"):
         if p.isdigit() and len(p) == 4:
             detected_years.add(int(p))
 
-for f in glob.glob("MASTER_*.xlsx"):
+for f in all_master_files:
     name_no_ext = f.replace(".xlsx", "").replace("MASTER_", "")
-    y_part = name_no_ext.split("-")[0]
-    if y_part.isdigit() and len(y_part) == 4:
-        y_val = int(y_part)
-        detected_years.add(y_val)
-        if y_val not in available_months_map:
-            available_months_map[y_val] = []
-        if len(name_no_ext.split("-")) > 1:
-            m_part = name_no_ext.split("-")[1]
-            if m_part.isdigit():
-                available_months_map[y_val].append(m_part)
+    parts_m = name_no_ext.split("-")
+    if len(parts_m) >= 2:
+        y_part, m_part = parts_m[0], parts_m[1]
+        if y_part.isdigit() and len(y_part) == 4 and m_part.isdigit():
+            y_val = int(y_part)
+            detected_years.add(y_val)
+            if y_val not in available_months_map:
+                available_months_map[y_val] = []
+            available_months_map[y_val].append(m_part)
 
-year_options = sorted(list(detected_years))
+year_options = sorted(list(detected_years), reverse=True)
+
+# Tentukan tahun dan bulan terbaru (terupdate) secara otomatis dari file master
+default_year = year_options[0] if year_options else 2026
+default_month_num = "09"
+
+if all_master_files:
+    # Urutkan nama file master secara alfabetis terbalik untuk mendapatkan yang terbaru (misal: 2026-10.xlsx, lalu 2026-09.xlsx)
+    all_master_files.sort(reverse=True)
+    latest_file = all_master_files[0]
+    latest_name_clean = latest_file.replace("MASTER_", "").replace(".xlsx", "")
+    l_parts = latest_name_clean.split("-")
+    if len(l_parts) >= 2 and l_parts[0].isdigit() and l_parts[1].isdigit():
+        default_year = int(l_parts[0])
+        default_month_num = l_parts[1]
+elif default_year in available_months_map and available_months_map[default_year]:
+    sorted_m = sorted(available_months_map[default_year], key=lambda x: int(x), reverse=True)
+    default_month_num = sorted_m[0]
 
 # -------------------------------------------------------------
 # 5. SIDEBAR: NAVIGASI MENU KUSTOM & PANEL ADMIN
@@ -369,7 +386,7 @@ if st.session_state["role"] == "admin":
     admin_upload_month_num = st.sidebar.selectbox(
         "Pilih Bulan File Master:",
         options=[f"{m:02d}" for m in range(1, 13)],
-        index=8,
+        index=int(default_month_num) - 1 if default_month_num.isdigit() else 8,
     )
     admin_upload_month = f"{admin_upload_year}-{admin_upload_month_num}"
 
@@ -410,10 +427,9 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 
-# Inisialisasi default tahun & bulan terpilih dengan pengurutan bulan kronologis dan bulan aktif di paling atas
-selected_year = 2026
-selected_month_num = "09"
-selected_month = "2026-09"
+selected_year = default_year
+selected_month_num = default_month_num
+selected_month = f"{selected_year}-{selected_month_num}"
 target_excel_file = f"MASTER_{selected_month}.xlsx"
 
 month_names_dict = {
@@ -424,7 +440,7 @@ month_names_dict = {
 
 def get_ordered_months(year):
     base_months = available_months_map.get(year, [f"{m:02d}" for m in range(1, 13)])
-    sorted_months = sorted(list(set(base_months)), key=lambda x: int(x))
+    sorted_months = sorted(list(set(base_months)), key=lambda x: int(x), reverse=True)
     if selected_month_num in sorted_months:
         sorted_months.remove(selected_month_num)
         sorted_months.insert(0, selected_month_num)
@@ -437,7 +453,7 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
         selected_year = st.selectbox(
             "Pilih Tahun:",
             options=year_options,
-            index=0,
+            index=year_options.index(default_year) if default_year in year_options else 0,
             key="main_year_select",
         )
     
@@ -460,6 +476,7 @@ if menu_option not in ["Teritori Mesin Engineer", "Jadwal Standby CSE"]:
     if not os.path.exists(target_excel_file):
         matching_masters = glob.glob(f"MASTER_{selected_year}-*.xlsx")
         if matching_masters:
+            matching_masters.sort(reverse=True)
             target_excel_file = matching_masters[0]
             selected_month = target_excel_file.replace("MASTER_", "").replace(".xlsx", "")
         elif os.path.exists("MASTER.xlsx"):
@@ -470,7 +487,7 @@ elif menu_option == "Teritori Mesin Engineer":
     
     with col_title:
         st.markdown(
-            f"<h4 style='margin-top: -5px; margin-bottom: 12px; color: #2c3e50; font-weight: 600; white-space: nowrap;'>🗺️️ Teritori Mesin Engineer ({selected_month})</h4>",
+            f"<h4 style='margin-top: -5px; margin-bottom: 12px; color: #2c3e50; font-weight: 600; white-space: nowrap;'>🗺️ Teritori Mesin Engineer ({selected_month})</h4>",
             unsafe_allow_html=True,
         )
 
@@ -478,7 +495,7 @@ elif menu_option == "Teritori Mesin Engineer":
         selected_year = st.selectbox(
             "Pilih Tahun:",
             options=year_options,
-            index=0,
+            index=year_options.index(default_year) if default_year in year_options else 0,
             key="teritory_year_select",
         )
 
@@ -504,6 +521,7 @@ elif menu_option == "Teritori Mesin Engineer":
     if not os.path.exists(target_excel_file):
         matching_masters = glob.glob(f"MASTER_{selected_year}-*.xlsx")
         if matching_masters:
+            matching_masters.sort(reverse=True)
             target_excel_file = matching_masters[0]
             selected_month = target_excel_file.replace("MASTER_", "").replace(".xlsx", "")
         elif os.path.exists("MASTER.xlsx"):
@@ -1611,14 +1629,12 @@ elif menu_option == "Uptime CSE by Tipe Mesin":
                             elif col_idx == 8:
                                 display_val = f"{num_val:.2f}"
                                 if current_table_target_dt == 0.25:
-                                    # Aturan khusus ATM: > 0.25 merah, <= 0.25 hijau
                                     cell_cls.append(
                                         "text-red"
                                         if num_val > 0.25
                                         else "text-green"
                                     )
                                 else:
-                                    # Aturan standar: > 0.80 merah, <= 0.80 hijau
                                     cell_cls.append(
                                         "text-red"
                                         if num_val > 0.80
